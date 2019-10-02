@@ -17,8 +17,8 @@ make install
 From a PostgreSQL shell, install meta's required extensions:
 ```sql
 CREATE EXTENSION hstore SCHEMA public;
-CREATE EXTENSION [pg_catalog_get_defs](https://github.com/aquametalabs/aquameta/tree/master/src/pg-extension/pg_catalog_get_defs) SCHEMA pg_catalog;
 ```
+`CREATE EXTENSION` [pg_catalog_get_defs](https://github.com/aquametalabs/aquameta/tree/master/src/pg-extension/pg_catalog_get_defs) `SCHEMA pg_catalog`;
 
 Finally, install the meta extension:
 ```sql
