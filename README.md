@@ -1,13 +1,11 @@
-Meta: A writable system catalog extension for PostgreSQL
-========================================================
+# Meta: A writable system catalog extension for PostgreSQL
 
 This extension provides two facilities:
 
 1. A set of "meta-identifiers" for unambiguously referencing database objects like tables, views, schemas, roles, etc.
 2. A normalized system catalog similar in function to `pg_catalog` or `information_schema`, but layed out more readably.
 
-INSTALL
--------
+# Install
 
 Install the extension into PostgreSQL's `extension/` directory:
 ```shell
@@ -28,3 +26,53 @@ CREATE EXTENSION meta;
 ```
 
 Optionally, install the [meta_triggers](https://github.com/aquametalabs/meta_triggers) extension, to make views updatable.
+
+# Documentation
+
+## Identifiers
+
+- cast_id
+- column_id
+- connection_id
+- constraint_id
+- extension_id
+- field_id
+- foreign_data_wrapper_id
+- foreign_key_id
+- foreign_server_id
+- function_id
+- operator_id
+- policy_id
+- relation_id
+- role_id
+- row_id
+- schema_id
+- sequence_id
+- table_privilege_id
+- trigger_id
+- type_id
+
+## Views
+
+- foreign_data_wrapper
+- foreign_key
+- foreign_server
+- foreign_table
+- function
+- function_parameter
+- operator
+- policy
+- policy_role
+- relation
+- relation_column
+- role
+- role_inheritance
+- schema
+- sequence
+- table
+- table_privilege
+- trigger
+- type
+- view
+
+
