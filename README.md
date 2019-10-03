@@ -2,8 +2,8 @@
 
 This extension provides two facilities:
 
-1. A set of "meta-identifiers" for unambiguously referencing database objects like tables, views, schemas, roles, etc.
-2. A normalized system catalog similar in function to `pg_catalog` or `information_schema`, but layed out more readably.
+1. A set of "meta-identifiers", PostgreSQL types that unambiguously reference database objects like tables, views, schemas, roles, etc.
+2. A normalized system catalog similar in function to `pg_catalog` or `information_schema`, but laid out more readably.
 
 Optionally, the [meta_triggers](https://github.com/aquametalabs/meta_triggers) extension can be installed as well, which makes the views writable, so that for example a schema can be created using an `insert` statement.
 
