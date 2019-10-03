@@ -31,6 +31,10 @@ Optionally, install the [meta_triggers](https://github.com/aquametalabs/meta_tri
 
 # Documentation
 
+## Schema Diagram
+
+![meta schema diagram](https://raw.githubusercontent.com/aquametalabs/meta/master/doc/meta.png)
+
 ## Identifiers
 
 - cast_id
