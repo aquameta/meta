@@ -282,7 +282,7 @@ select has_function('test_schema', 'add', array['integer', 'integer'], 'Function
 select ok(
     exists(
         select 1 from meta.function
-        where id = meta.function_id('test_schema', 'add', array['a integer', 'b integer'])
+        where id = meta.function_id('test_schema', 'add', array['integer', 'integer'])
     ),
     'Function inserted with schema_id should exist in meta.function.'
 );
@@ -298,7 +298,7 @@ select has_function('test_schema', 'subtract', array['integer', 'integer'], 'Fun
 select ok(
     exists(
         select 1 from meta.function
-        where id = meta.function_id('test_schema', 'subtract', array['a integer', 'b integer'])
+        where id = meta.function_id('test_schema', 'subtract', array['integer', 'integer'])
     ),
     'Function inserted with schema_name should exist in meta.function.'
 );
@@ -313,11 +313,11 @@ update meta.function set name = 'sum',
                          definition = 'begin return x+y; end;',
                          return_type = 'int8',
                          language = 'plpgsql'
-                     where id = meta.function_id('test_schema', 'add', array['a integer', 'b integer']);
+                     where id = meta.function_id('test_schema', 'add', array['integer', 'integer']);
 select hasnt_function('test_schema', 'add', array['integer', 'integer'], 'Function updated: old function name with old parameters should not exist.');
 select has_function('test_schema', 'sum', array['bigint', 'bigint'], 'Function updated: new function name with new parameters should exist.');
 select ok(
-    exists(select 1 from meta.function where id = row(row('test_schema'), 'sum', array['x bigint', 'y bigint'])::meta.function_id),
+    exists(select 1 from meta.function where id = row(row('test_schema'), 'sum', array['bigint', 'bigint'])::meta.function_id),
     'Function updated: new function name with new parameters should exist in meta.function.'
 );
 
@@ -328,7 +328,7 @@ select ok(
 );
 
 -- delete
-delete from meta.function where id = row(row('test_schema'), 'sum', array['x bigint', 'y bigint'])::meta.function_id;
+delete from meta.function where id = row(row('test_schema'), 'sum', array['bigint', 'bigint'])::meta.function_id;
 select hasnt_function('test_schema', 'sum', array['bigint', 'bigint'], 'Function deleted: old function should not exist.');
 select ok(
     not exists(select 1 from meta.function where id = row(row('test_schema'), 'sum', array['a bigint', 'b bigint'])::meta.function_id),
