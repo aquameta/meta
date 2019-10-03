@@ -11,17 +11,20 @@ INSTALL
 
 Install the extension into PostgreSQL's `extension/` directory:
 ```shell
+cd meta/
 make
 sudo make install
 ```
 
-From a PostgreSQL shell, install meta's required extensions:
+From a PostgreSQL shell, install the `hstore` extension in schema `public`.
 
-`CREATE EXTENSION hstore SCHEMA public;`
-
-`CREATE EXTENSION` [pg_catalog_get_defs](https://github.com/aquametalabs/aquameta/tree/master/src/pg-extension/pg_catalog_get_defs) `SCHEMA pg_catalog;`
+```sql
+CREATE EXTENSION hstore SCHEMA public;
+```
 
 Finally, install the meta extension:
 ```sql
 CREATE EXTENSION meta;
 ```
+
+Optionally, install the [meta_triggers](https://github.com/aquametalabs/meta_triggers) extension, to make views updatable.
