@@ -59,7 +59,13 @@ Optionally, install the [meta_triggers](https://github.com/aquametalabs/meta_tri
 - type_id
 
 ## Views
-
+- cast
+- column
+- connection
+- constraint_check
+- constraint_unique
+- extension
+- foreign_column
 - foreign_data_wrapper
 - foreign_key
 - foreign_server
