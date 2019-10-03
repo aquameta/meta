@@ -31,6 +31,10 @@ Optionally, install the [meta_triggers](https://github.com/aquametalabs/meta_tri
 
 # Documentation
 
+## Schema Diagram
+
+![meta schema diagram](https://raw.githubusercontent.com/aquametalabs/meta/master/doc/meta.png)
+
 ## Identifiers
 
 - cast_id
@@ -55,7 +59,13 @@ Optionally, install the [meta_triggers](https://github.com/aquametalabs/meta_tri
 - type_id
 
 ## Views
-
+- cast
+- column
+- connection
+- constraint_check
+- constraint_unique
+- extension
+- foreign_column
 - foreign_data_wrapper
 - foreign_key
 - foreign_server
