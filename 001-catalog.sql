@@ -985,3 +985,23 @@ create view meta.foreign_column as
                c.table_name = pgc.relname;
 
 
+create or replace function meta.row_exists(in row_id meta.row_id, out answer boolean) as $$
+    declare
+        stmt text;
+    begin
+        stmt := format (
+            'select (count(*) = 1) from %I.%I where %I::text = %L',
+                (row_id::meta.schema_id).name,
+                (row_id::meta.relation_id).name,
+                (row_id.pk_column_id).name,
+                row_id.pk_value
+            );
+
+        -- raise warning '%s', stmt;
+        execute stmt into answer;
+
+    exception
+        when undefined_table then
+            answer := false;
+    end;
+$$ language plpgsql;
