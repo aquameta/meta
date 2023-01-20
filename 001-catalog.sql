@@ -20,7 +20,8 @@ create view meta.schema as
 /******************************************************************************
  * meta.type
  *****************************************************************************/
--- written by get_typedef* written by RhodiumToad
+-- get_typedef* written by RhodiumToad
+-- FIXME: these are currently not used because they broke, so definition column was removed.
 
 create or replace function get_typedef_enum(oid) returns text
   language plpgsql
@@ -196,6 +197,10 @@ create function get_typedef(typid oid) returns text
       when 'c' then return get_typedef_composite(typid);
       when 'e' then return get_typedef_enum(typid);
       when 'r' then return get_typedef_range(typid);
+      else
+          raise notice 'type % is not supported', typid::regtype;
+          return null;
+      /*  FIXME: add support for pseudotype 'p' and multirange 'm', for now don't blow up
       when 'p' then
         if not r.typisdefined then
           return format('CREATE TYPE %s', typid::regtype);
@@ -203,6 +208,7 @@ create function get_typedef(typid oid) returns text
         raise exception 'type % is a pseudotype', typid::regtype;
       else
         raise exception 'type % has unknown typtype %', typid::regtype, r.typtype;
+     */
     end case;
   end;
 $$;
@@ -498,8 +504,8 @@ create view meta.function as
             left join information_schema.parameters p
                 on p.specific_catalog = r.specific_catalog and
                     p.specific_schema = r.specific_schema and
-                    p.specific_name = r.specific_name 
-   
+                    p.specific_name = r.specific_name
+
         where r.routine_type = 'FUNCTION' and
             r.routine_name not in ('pg_identify_object', 'pg_sequence_parameters') and
             p.ordinal_position > 0 and
