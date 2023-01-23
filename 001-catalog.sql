@@ -192,13 +192,13 @@ create function get_typedef(typid oid) returns text
       raise exception 'unknown type oid %', typid;
     end if;
     case r.typtype
-      when 'b' then return get_typedef_base(typid);
-      when 'd' then return get_typedef_domain(typid);
-      when 'c' then return get_typedef_composite(typid);
-      when 'e' then return get_typedef_enum(typid);
-      when 'r' then return get_typedef_range(typid);
+      when 'b' then return meta.get_typedef_base(typid);
+      when 'd' then return meta.get_typedef_domain(typid);
+      when 'c' then return meta.get_typedef_composite(typid);
+      when 'e' then return meta.get_typedef_enum(typid);
+      when 'r' then return meta.get_typedef_range(typid);
       else
-          raise notice 'type % is not supported', typid::regtype;
+          -- raise notice 'type % is not supported', typid::regtype;
           return null;
       /*  FIXME: add support for pseudotype 'p' and multirange 'm', for now don't blow up
       when 'p' then
