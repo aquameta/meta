@@ -12,10 +12,19 @@ drop schema if exists meta_meta cascade;
 create schema meta_meta;
 set search_path=meta_meta, meta;
 
-create table meta_meta.relation (
-	-- TYPE
+/*
+ * entity: a meta_entitty "thing" in PostgreSQL, e.g. table, column, schema, view, etc.  something that the meta catalog should track.
+ */
+
+create table meta_meta.entity (
 	id serial not null primary key,
+
+    -- definition vars
 	name text not null,
+	constructor_arg_names text[] not null,
+	constructor_arg_types text[] not null,
+
+	-- TYPE
 	-- gripe: ERROR:  cannot use column references in default expression
 	type_id meta.type_id not null,
 	type_constructor_function_id meta.function_id,-- not null,
@@ -53,7 +62,12 @@ create table meta_relation_update_handler (
 );
 */
 
-create or replace function generate_meta_meta_relation (name text, constructor_arg_names text[], constructor_arg_types text[]) returns void as $$
+
+/*
+ * inserts a db entity that should exist in meta, into the `meta_meta.entity` table.
+ */
+
+create or replace function generate_meta_meta_entity (name text, constructor_arg_names text[], constructor_arg_types text[]) returns void as $$
 declare
 	-- type
 	_type_id meta.type_id;
@@ -112,8 +126,11 @@ begin
 	_relation_update_trigger_id :=
 		meta.trigger_id('meta', name, 'meta_' || name || '_update_trigger');
 
-	insert into meta_meta.relation (
+	insert into meta_meta.entity (
         name,
+        constructor_arg_names,
+        constructor_arg_types,
+
 		-- type
 		type_id,
 		type_constructor_function_id,
@@ -136,6 +153,9 @@ begin
 		relation_update_trigger_id
 	) values (
         name,
+        constructor_arg_names,
+        constructor_arg_types,
+
 		-- type
 		_type_id,
 		_type_constructor_function_id,
@@ -161,30 +181,30 @@ end;
 $$ language plpgsql;
 
 
--- use the generator function to propogate meta_meta_relation with the stuff that is expected to be there
+-- use the generator function to propogate meta_meta.entity with the stuff that is expected to be there
 select
-    generate_meta_meta_relation('schema',      '{"name"}', '{"text"}'),
-    generate_meta_meta_relation('type',        '{"schema_name", "name"}', '{"text","text"}'),
-    generate_meta_meta_relation('cast',        '{"source_type_schema_name", "source_type_name", "target_type_schema_name", "target_type_name"}', '{"text","text","text","text"}'),
-    generate_meta_meta_relation('operator',    '{"schema_name", "name", "left_arg_type_schema_name", "left_arg_type_name", "right_arg_type_schema_name", "right_arg_type_name"}','{"text","text","text","text","text","text"}'),
-    generate_meta_meta_relation('sequence',    '{"schema_name", "name"}','{"text","text"}'),
-    generate_meta_meta_relation('relation',    '{"schema_name", "name"}','{"text","text"}'),
-    generate_meta_meta_relation('column',      '{"schema_name", "relation__name", "name"}','{"text","text","text"}'),
-    generate_meta_meta_relation('foreign_key', '{"schema_name", "relation__name", "name"}','{"text","text","text"}'),
-    generate_meta_meta_relation('row',         '{"schema_name", "relation_name", "pk_column_name", "pk_value"}','{"text","text","text","text"}'),
-    generate_meta_meta_relation('field',       '{"schema_name", "relation_name", "pk_column_name", "pk_value", "column_name"}','{"text","text","text","text","text"}'),
-    generate_meta_meta_relation('function',    '{"schema_name", "name", "parameters"}','{"text","text","text[]"}'),
-    generate_meta_meta_relation('trigger',     '{"schema_name", "relation_name", "name"}','{"text","text","text"}'),
-    generate_meta_meta_relation('role',        '{"name"}','{"text"}'),
-    generate_meta_meta_relation('connection',  '{"pid", "connection_start"}','{"text","text"}'),
-    generate_meta_meta_relation('constraint',  '{"schema_name", "relation_name", "name"}','{"text","text","text"}'),
-    generate_meta_meta_relation('constraint_unique', '{"schema_name", "table_name", "name", "column_names"}','{"text","text","text","text"}'),
-    -- generate_meta_meta_relation('constraint_check',-- '{"schema_name", "table_name", "name", "column_names"}'),
-    generate_meta_meta_relation('extension',   '{"name"}','{"text"}'),
-    generate_meta_meta_relation('foreign_data_wrapper', '{"name"}', '{"text"}'),
-    generate_meta_meta_relation('foreign_server','{"name"}', '{"text"}'),
-    generate_meta_meta_relation('foreign_table','{"schema_name", "name"}', '{"text","text"}'),
-    generate_meta_meta_relation('foreign_column','{"schema_name", "name"}', '{"text","text"}')
+    generate_meta_meta_entity('schema',      '{"name"}', '{"text"}'),
+    generate_meta_meta_entity('type',        '{"schema_name", "name"}', '{"text","text"}'),
+    generate_meta_meta_entity('cast',        '{"source_type_schema_name", "source_type_name", "target_type_schema_name", "target_type_name"}', '{"text","text","text","text"}'),
+    generate_meta_meta_entity('operator',    '{"schema_name", "name", "left_arg_type_schema_name", "left_arg_type_name", "right_arg_type_schema_name", "right_arg_type_name"}','{"text","text","text","text","text","text"}'),
+    generate_meta_meta_entity('sequence',    '{"schema_name", "name"}','{"text","text"}'),
+    generate_meta_meta_entity('relation',    '{"schema_name", "name"}','{"text","text"}'),
+    generate_meta_meta_entity('column',      '{"schema_name", "relation_name", "name"}','{"text","text","text"}'),
+    generate_meta_meta_entity('foreign_key', '{"schema_name", "relation_name", "name"}','{"text","text","text"}'),
+    generate_meta_meta_entity('row',         '{"schema_name", "relation_name", "pk_column_name", "pk_value"}','{"text","text","text","text"}'),
+    generate_meta_meta_entity('field',       '{"schema_name", "relation_name", "pk_column_name", "pk_value", "column_name"}','{"text","text","text","text","text"}'),
+    generate_meta_meta_entity('function',    '{"schema_name", "name", "parameters"}','{"text","text","text[]"}'),
+    generate_meta_meta_entity('trigger',     '{"schema_name", "relation_name", "name"}','{"text","text","text"}'),
+    generate_meta_meta_entity('role',        '{"name"}','{"text"}'),
+    generate_meta_meta_entity('connection',  '{"pid", "connection_start"}','{"text","text"}'),
+    generate_meta_meta_entity('constraint',  '{"schema_name", "relation_name", "name"}','{"text","text","text"}'),
+    generate_meta_meta_entity('constraint_unique', '{"schema_name", "table_name", "name", "column_names"}','{"text","text","text","text"}'),
+    -- generate_meta_meta_entity('constraint_check',-- '{"schema_name", "table_name", "name", "column_names"}'),
+    generate_meta_meta_entity('extension',   '{"name"}','{"text"}'),
+    generate_meta_meta_entity('foreign_data_wrapper', '{"name"}', '{"text"}'),
+    generate_meta_meta_entity('foreign_server','{"name"}', '{"text"}'),
+    generate_meta_meta_entity('foreign_table','{"schema_name", "name"}', '{"text","text"}'),
+    generate_meta_meta_entity('foreign_column','{"schema_name", "name"}', '{"text","text"}')
 ;
 
 
@@ -238,7 +258,7 @@ select
     _exists(relation_delete_trigger_id) relation_delete_trigger_id,
     _exists(relation_update_trigger_function_id) relation_update_trigger_function_id,
     _exists(relation_update_trigger_id) relation_update_trigger_id
-    from meta_meta.relation
+    from meta_meta.entity
 ;
 
 
@@ -264,7 +284,7 @@ select
     (r13.id is not null) as relation_update_trigger_function_id,
     (r14.id is not null) as relation_update_trigger_id
 
-    from meta_meta.relation r
+    from meta_meta.entity r
 
     left join meta.type r1 on type_id = r1.id
     left join meta.function r2 on type_constructor_function_id = r2.id
