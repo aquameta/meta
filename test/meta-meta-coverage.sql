@@ -189,6 +189,8 @@ select
     generate_meta_meta_entity('operator',    '{"schema_name", "name", "left_arg_type_schema_name", "left_arg_type_name", "right_arg_type_schema_name", "right_arg_type_name"}','{"text","text","text","text","text","text"}'),
     generate_meta_meta_entity('sequence',    '{"schema_name", "name"}','{"text","text"}'),
     generate_meta_meta_entity('relation',    '{"schema_name", "name"}','{"text","text"}'),
+    generate_meta_meta_entity('table',       '{"schema_name", "name"}','{"text","text"}'),
+    generate_meta_meta_entity('view',        '{"schema_name", "name"}','{"text","text"}'),
     generate_meta_meta_entity('column',      '{"schema_name", "relation_name", "name"}','{"text","text","text"}'),
     generate_meta_meta_entity('foreign_key', '{"schema_name", "relation_name", "name"}','{"text","text","text"}'),
     generate_meta_meta_entity('row',         '{"schema_name", "relation_name", "pk_column_name", "pk_value"}','{"text","text","text","text"}'),
