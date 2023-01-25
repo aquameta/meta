@@ -8,9 +8,11 @@ basically checks to see if it's all here.
 
 begin;
 
+/*
 drop schema if exists meta_meta cascade;
 create schema meta_meta;
 set search_path=meta_meta, meta;
+*/
 
 /*
  * entity: a meta_entitty "thing" in PostgreSQL, e.g. table, column, schema, view, etc.  something that the meta catalog should track.
@@ -91,40 +93,40 @@ declare
 	_relation_update_trigger_id meta.trigger_id;
 begin
 	-- type
-	_type_id := meta.type_id('meta', name || '_id');
+	_type_id := meta.type_id('meta2', name || '_id');
 	_type_constructor_function_id :=
-		meta.function_id('meta', name || '_id', constructor_arg_types);
+		meta.function_id('meta2', name || '_id', constructor_arg_types);
 	_type_to_json_comparator_op_id :=
-		meta.operator_id('meta', '=', 'meta', name || '_id', 'public', 'json');
+		meta.operator_id('meta2', '=', 'meta2', name || '_id', 'public', 'json');
 	_type_to_json_type_constructor_function_id :=
-		meta.function_id('meta', name || '_id', '{"json"}');
+		meta.function_id('meta2', name || '_id', '{"json"}');
 	_type_to_json_cast_id :=
-		meta.cast_id('meta', name || '_id', 'public', 'json');
+		meta.cast_id('meta2', name || '_id', 'public', 'json');
 
 	-- relation
 	_relation_id :=
-		meta.relation_id('meta', name);
+		meta.relation_id('meta2', name);
 	-- create -> insert
 	_relation_create_stmt_function_id :=
-		meta.function_id('meta', 'stmt_' || name || '_create', constructor_arg_types);
+		meta.function_id('meta2', 'stmt_' || name || '_create', constructor_arg_types);
 	_relation_insert_trigger_function_id :=
-		meta.function_id('meta', name || '_insert', NULL);
+		meta.function_id('meta2', name || '_insert', NULL);
 	_relation_insert_trigger_id :=
-		meta.trigger_id('meta', name, 'meta_' || name || '_insert_trigger');
+		meta.trigger_id('meta2', name, 'meta_' || name || '_insert_trigger');
 
 	-- drop -> delete
 	_relation_drop_stmt_function_id :=
-		meta.function_id('meta', 'stmt_' || name || '_drop', constructor_arg_types);
+		meta.function_id('meta2', 'stmt_' || name || '_drop', constructor_arg_types);
 	_relation_delete_trigger_function_id :=
-		meta.function_id('meta', name || '_delete', NULL);
+		meta.function_id('meta2', name || '_delete', NULL);
 	_relation_delete_trigger_id :=
-		meta.trigger_id('meta', name, 'meta_' || name || '_delete_trigger');
+		meta.trigger_id('meta2', name, 'meta_' || name || '_delete_trigger');
 
 	-- alter -> update
 	_relation_update_trigger_function_id :=
-		meta.function_id('meta', name || '_update', NULL);
+		meta.function_id('meta2', name || '_update', NULL);
 	_relation_update_trigger_id :=
-		meta.trigger_id('meta', name, 'meta_' || name || '_update_trigger');
+		meta.trigger_id('meta2', name, 'meta_' || name || '_update_trigger');
 
 	insert into meta_meta.entity (
         name,
@@ -214,28 +216,28 @@ select
 
 
 -- exist functions for: function, trigger, op, type, relation, cast
-create or replace function _exists(in f meta.function_id, out ex boolean) as $$
-    select (count(*) = 1) from meta.function where id = f;
+create or replace function _exists(in f meta2.function_id, out ex boolean) as $$
+    select (count(*) = 1) from meta2.function where id = f;
 $$ language sql;
 
-create or replace function _exists(in t meta.trigger_id, out ex boolean) as $$
-    select (count(*) = 1) from meta.trigger where id = t;
+create or replace function _exists(in t meta2.trigger_id, out ex boolean) as $$
+    select (count(*) = 1) from meta2.trigger where id = t;
 $$ language sql;
 
-create or replace function _exists(in o meta.operator_id, out ex boolean) as $$
-    select (count(*) = 1) from meta.operator where id = o;
+create or replace function _exists(in o meta2.operator_id, out ex boolean) as $$
+    select (count(*) = 1) from meta2.operator where id = o;
 $$ language sql;
 
-create or replace function _exists(in t meta.type_id, out ex boolean) as $$
-    select (count(*) = 1) from meta.type where id = t;
+create or replace function _exists(in t meta2.type_id, out ex boolean) as $$
+    select (count(*) = 1) from meta2.type where id = t;
 $$ language sql;
 
-create or replace function _exists(in r meta.relation_id, out ex boolean) as $$
-    select (count(*) = 1) from meta.relation where id = r;
+create or replace function _exists(in r meta2.relation_id, out ex boolean) as $$
+    select (count(*) = 1) from meta2.relation where id = r;
 $$ language sql;
 
-create or replace function _exists(in c meta.cast_id, out ex boolean) as $$
-    select (count(*) = 1) from meta.cast where id = c;
+create or replace function _exists(in c meta2.cast_id, out ex boolean) as $$
+    select (count(*) = 1) from meta2.cast where id = c;
 $$ language sql;
 
 
