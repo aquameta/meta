@@ -166,7 +166,7 @@ create or replace function get_typedef_base(oid) returns text
                                        when 'e' then 'external'
                                        when 'x' then 'extended'
                                        end),
-                       (12, 'CATEGORY', quote_literal(t.typcategory)),
+                       (12, 'CATEGORY', quote_literal(t.typcategory::text)),
                        (13, 'PREFERRED', nullif(t.typispreferred,false)::text),
                        (14, 'DEFAULT', case when t.typdefaultbin is not null
                                            then pg_get_expr(t.typdefaultbin, 0)
