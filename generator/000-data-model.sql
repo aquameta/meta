@@ -67,8 +67,41 @@ insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_typ
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_column', '{"schema_name", "name"}', '{"text","text"}');
 
 /*
- * pg_entity_component data
- */
+Each meta-identifier (e.g. schema_id, table_id, column_id, etc.) is a composite type that encapsulates the names
+necessary to uniquely identify some entity in PostgreSQL:
+
+- create type column_id
+
+PostgreSQL composite types are instantiated via `row('public','my_table', 'id')::column_id`, but this isn't very pretty, so
+each meta-id also has a constructor function whose arguments are the same as the arguments you would pass to row().
+
+- create function column_id(schema, relation, name) returns meta.column_id
+
+Each composite type can be represented as other types as well:
+
+- `json` - PostgreSQL's JSON type
+- `jsonb` - PostgreSQL's binary JSON type
+- `meta_id` - A custom type for representing meta identifiers as text strings
+
+The `meta_id` type is just a text string representation of an identifier, for example `'schema/public'` or
+`'column/public/my_table/id'`.  The general format of the type is `'{entity}[/arg]+'`.  They provide syntactic sugar
+for more readable code, and also simple validation checks.  They do not check that the identifier points to a
+PostgreSQL entity that actually exists, because sometimes this is not desirable and would certainly incur undue
+performance overhead.  However they do check for valid arguments, and ensure that the identifier points to an entity
+that *could* exist.
+
+Some plausible example usages:
+
+```
+select 'column/public/my_table/id'::meta.column_id;
+select meta.column_id('public','my_table','id')
+select meta.schema_id(meta.column_id('public','my_table','id').schema);
+select meta.column_id('public','my_table','id')::meta.schema_id;
+```
+
+
+*/
+
 
 insert into meta_meta.pg_entity_component(name,"type") values ('type', 'type');
 insert into meta_meta.pg_entity_component(name,"type") values ('type_constructor_function','function');

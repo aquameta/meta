@@ -3,52 +3,27 @@ meta-meta-generator
 
 generates the source code for meta!
 
-type_id
-type_constructor_function_id
+type
+type_constructor_function
 
 -- json stuff
 type_to_json_comparator_function
-type_to_json_comparator_op_id
-type_to_json_type_constructor_function_id
-type_to_json_cast_id
+type_to_json_comparator_op
+type_to_json_type_constructor_function
+type_to_json_cast
 
 -- view
-relation_id
-relation_create_stmt_function_id
+relation
+relation_create_stmt_function
 create_relation_drop_stmt_create_function
 
 -- view triggers
-relation_insert_trigger_function_id
-relation_insert_trigger_id
-relation_delete_trigger_function_id
-relation_delete_trigger_id
-relation_update_trigger_function_id
-relation_update_trigger_id
-
-:'<,'>s/^/create function stmt_create_/g
-:'<,'>s/$/ (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$^Mdeclare stmt text;^Mbegin^Mend;^M$$ language plpgsql;^M^M/g
-
-select stmt_create_type(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_type_constructor_function(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-
-select stmt_create_type_to_json_comparator_function(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_type_to_json_comparator_op(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_type_to_json_type_constructor_function(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_type_to_json_cast(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-
-select stmt_create_relation(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_relation_create_stmt_create_function(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_relation_drop_stmt_create_function(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-
-select stmt_create_relation_insert_trigger_function(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_relation_insert_trigger(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_relation_delete_trigger_function(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_relation_delete_trigger(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_relation_update_trigger_function(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-select stmt_create_relation_update_trigger(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;
-
-:'<,'>s/^/select stmt_create_/g
-:'<,'>s/_id$/(name, constructor_arg_names, constructor_arg_types) from meta_meta.entity;/g
+relation_insert_trigger_function
+relation_insert_trigger
+relation_delete_trigger_function
+relation_delete_trigger
+relation_update_trigger_function
+relation_update_trigger
 
 */
 begin;
@@ -109,6 +84,18 @@ end;
 $$ language plpgsql;
 
 
+
+
+
+/*
+
+
+ create type
+
+
+ */
+
+
 /**********************************************************************************
 create type meta.relation_id as (
     schema_id meta.schema_id,
@@ -130,27 +117,39 @@ $$ language plpgsql;
 
 /**********************************************************************************
 create function meta.relation_id(schema_name text, name text) returns meta.relation_id as $$
-    select row(row(schema_name), name)::meta.relation_id
+    select row(schema_name, name)::meta.relation_id
 $$ language sql immutable;
 **********************************************************************************/
 
 create or replace function stmt_create_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare 
+declare
     stmt text := '';
     snippets public.hstore;
     i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
     stmt := format('create function meta2.%I(%s) returns meta2.%I as $_$ select row(%s)::meta2.%I $_$ language sql immutable;',
-        name || '_id',
-        snippets['attributes'],
-        name || '_id',
-        snippets['arg_names'],
-        name || '_id'
+       name || '_id',
+       snippets['attributes'],
+       name || '_id',
+       snippets['arg_names'],
+       name || '_id'
     );
     return stmt;
 end;
 $$ language plpgsql;
+
+
+
+/*
+
+
+ to json
+
+
+ */
+
+
 
 
 /**********************************************************************************
@@ -171,9 +170,9 @@ declare
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
     stmt := format('create function meta2.eq(leftarg meta2.%I, rightarg json) returns boolean as $_$%s$_$ language sql;',
-                   name || '_id',
-                   snippets['compare_to_json']
-        );
+        name || '_id',
+        snippets['compare_to_json']
+    );
     return stmt;
 end;
 $$ language plpgsql;
@@ -184,7 +183,7 @@ create operator = (
     leftarg = meta.foreign_key_id,
     rightarg = json,
     procedure = meta.eq
-);$$ language sql;
+);
 **********************************************************************************/
 
 create or replace function stmt_create_type_to_json_comparator_op (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
@@ -194,9 +193,9 @@ declare
     i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create operator = (leftarg meta2.%I, rightarg json, procedure = meta.eq) language sql;',
-                   name || '_id'
-        );
+    stmt := format('create operator = (leftarg = meta2.%I, rightarg = json, procedure = meta2.eq);',
+        name || '_id'
+    );
     return stmt;
 end;
 $$ language plpgsql;
@@ -215,7 +214,7 @@ declare
     i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create function meta2.%I(value json) returns meta.%I as $_$select meta.%I(%s) $_$ immutable language sql;',
+    stmt := format('create function meta2.%I(value json) returns meta2.%I as $_$select meta2.%I(%s) $_$ immutable language sql;',
         name || '_id',
         name || '_id',
         name || '_id',
@@ -239,7 +238,7 @@ declare
     i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create cast (json as meta.%I) with function meta.%I(json) as assignment;',
+    stmt := format('create cast (json as meta2.%I) with function meta2.%I(json) as assignment;',
         name || '_id',
         name || '_id'
     );
@@ -248,70 +247,26 @@ end;
 $$ language plpgsql;
 
 
+/**********************************************************************************
+create cast (meta.foreign_key_id as json)
+with function meta.foreign_key_id(json)
+as assignment;
+**********************************************************************************/
 
-/*
-create or replace function stmt_create_relation (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
+create or replace function stmt_create_json_to_type_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+    i integer := 1;
 begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create cast (meta2.%I as json) with function meta2.%I(json) as assignment;',
+        name || '_id',
+        name || '_id'
+    );
+    return stmt;
 end;
 $$ language plpgsql;
 
-
-create or replace function stmt_create_relation_create_stmt_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
-begin
-end;
-$$ language plpgsql;
-
-
-create or replace function stmt_create_relation_insert_trigger_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
-begin
-end;
-$$ language plpgsql;
-
-
-create or replace function stmt_create_relation_insert_trigger (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
-begin
-end;
-$$ language plpgsql;
-
-
-create or replace function stmt_create_relation_drop_stmt_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
-begin
-end;
-$$ language plpgsql;
-
-
-create or replace function stmt_create_relation_delete_trigger_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
-begin
-end;
-$$ language plpgsql;
-
-
-create or replace function stmt_create_relation_delete_trigger (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
-begin
-end;
-$$ language plpgsql;
-
-
-create or replace function stmt_create_relation_update_trigger_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
-begin
-end;
-$$ language plpgsql;
-
-
-create or replace function stmt_create_relation_update_trigger (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare stmt text;
-begin
-end;
-$$ language plpgsql;
-
-*/
 
 commit;
