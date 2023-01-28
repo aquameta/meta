@@ -33,6 +33,7 @@ create table meta_meta.pg_entity (
 create table meta_meta.pg_entity_component (
 	id serial not null primary key,
     name text,
+    position integer,
     "type" text
 );
 
@@ -103,11 +104,13 @@ select meta.column_id('public','my_table','id')::meta.schema_id;
 */
 
 
-insert into meta_meta.pg_entity_component(name,"type") values ('type', 'type');
-insert into meta_meta.pg_entity_component(name,"type") values ('type_constructor_function','function');
-insert into meta_meta.pg_entity_component(name,"type") values ('type_to_json_comparator_op', 'op');
-insert into meta_meta.pg_entity_component(name,"type") values ('type_to_json_type_constructor_function', 'function');
-insert into meta_meta.pg_entity_component(name,"type") values ('type_to_json_cast', 'cast');
+insert into meta_meta.pg_entity_component(position,name,"type") values (1,'type', 'type');
+insert into meta_meta.pg_entity_component(position,name,"type") values (2,'type_constructor_function','function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (3,'type_to_json_comparator_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_json_comparator_op', 'op');
+insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_json_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_json_cast', 'cast');
+/*
 insert into meta_meta.pg_entity_component(name,"type") values ('relation', 'view');
 insert into meta_meta.pg_entity_component(name,"type") values ('relation_create_stmt_function', 'function');
 insert into meta_meta.pg_entity_component(name,"type") values ('relation_insert_trigger_function', 'function');
@@ -118,5 +121,6 @@ insert into meta_meta.pg_entity_component(name,"type") values ('relation_delete_
 insert into meta_meta.pg_entity_component(name,"type") values ('relation_update_trigger_function', 'function');
 insert into meta_meta.pg_entity_component(name,"type") values ('relation_update_trigger', 'trigger');
 
+*/
 
 commit;
