@@ -31,11 +31,47 @@ begin;
 -- these functions are created in meta_meta (so they can be discarded)
 set search_path=meta_meta;
 
+/******************************************************************************
+component_statement()
+
+For the supplied entity (e.g. `relation`, `column` etc., an entry in the
+pg_entity table), and the supplied component (e.g. `type`, `type_constructor`,
+`cast_to_json` etc.), generate the statement that creates said component for
+said entity.
+
+Usage:  Use component_statement() with exec() in a SQL query that queries
+pg_entity and pg_component.
+
+To generate all components:
+
+```
+select e.name as entity_name, c.name as component_name, exec(component_statement(e.name, c.name))
+from pg_entity e, pg_entity_component c
+order by e.name, c.position;
+```
+******************************************************************************/
+
+create or replace function component_statement(entity text, component text) returns text as $$
+declare
+stmt text;
+begin
+    execute format('
+    select %I(name, constructor_arg_names, constructor_arg_types)
+    from meta_meta.pg_entity e
+    where name=%L',
+        'stmt_create_' || component,
+        entity
+    ) into stmt;
+    return stmt;
+end
+$$ language plpgsql;
+
+
 /*
  * generates a bunch of plpgsql snippets that are recurring patterns in the the code generators below
  */
 create or replace function stmt_snippets(name text, constructor_arg_names text[], constructor_arg_types text[]) returns public.hstore as $$
-declare 
+declare
     arg_name text;
     result public.hstore;
     i integer := 1;
@@ -46,23 +82,30 @@ declare
     arg_names text := '';                  -- "schema_name, relation_name, name"
     compare_to_jsonb text := 'select ';     -- "select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'"
     constructor_args_from_jsonb text := ''; -- value->>'schema_name', value->>'name'
+    meta_id_path text := name || '/';
 
 begin
     foreach arg_name in array constructor_arg_names loop
-        attributes :=       attributes                              || format('%I %s', constructor_arg_names[i], constructor_arg_types[i]);
-        constructor_args := constructor_args                        || format('%I %s', constructor_arg_names[i], constructor_arg_types[i]);
-        arg_names :=        arg_names                               || format('%I', constructor_arg_names[i]);
+        attributes :=       attributes                                  || format('%I %s', constructor_arg_names[i], constructor_arg_types[i]);
+        constructor_args := constructor_args                            || format('%I %s', constructor_arg_names[i], constructor_arg_types[i]);
+        arg_names :=        arg_names                                   || format('%I', constructor_arg_names[i]);
+        meta_id_path :=     meta_id_path                                || format('%I', constructor_arg_names[i]);
+
 		-- constructor args from json
 		if constructor_arg_types[i] = 'text[]' then
-			constructor_args_from_jsonb :=  constructor_args_from_jsonb || format('(select array_agg(value) from jsonb_array_elements_text(value->%L))', constructor_arg_names[i]);
+			constructor_args_from_jsonb :=  constructor_args_from_jsonb ||
+                format('(select array_agg(value) from jsonb_array_elements_text(value->%L))', constructor_arg_names[i]);
 		else
-			constructor_args_from_jsonb :=  constructor_args_from_jsonb || format('value->>%L', constructor_arg_names[i]);
+			constructor_args_from_jsonb :=  constructor_args_from_jsonb ||
+                format('value->>%L', constructor_arg_names[i]);
 		end if;
         -- compare to jsonb
         if constructor_arg_types[i] = 'text[]' then
-            compare_to_jsonb :=  compare_to_jsonb                   || format('to_jsonb((leftarg).%I) = rightarg->%L', constructor_arg_names[i], constructor_arg_names[i]);
+            compare_to_jsonb :=  compare_to_jsonb
+                || format('to_jsonb((leftarg).%I) = rightarg->%L', constructor_arg_names[i], constructor_arg_names[i]);
         else
-            compare_to_jsonb :=  compare_to_jsonb                   || format('(leftarg).%I = rightarg->>%L', constructor_arg_names[i], constructor_arg_names[i]);
+            compare_to_jsonb :=  compare_to_jsonb ||
+                format('(leftarg).%I = rightarg->>%L', constructor_arg_names[i], constructor_arg_names[i]);
         end if;
 
         -- comma?
@@ -72,6 +115,7 @@ begin
             arg_names := arg_names || ',';
             compare_to_jsonb := compare_to_jsonb || ' and ';
             constructor_args_from_jsonb := constructor_args_from_jsonb || ', ';
+            meta_id_path := meta_id_path || '/';
         end if;
         i := i+1;
         -- raise notice '    arg_names: %', arg_names;
@@ -81,29 +125,66 @@ begin
     -- raise notice 'attributes: %', attributes;
     -- raise notice 'constructor_args: %', constructor_args;
     -- raise notice 'compare_to_jsonb: %', compare_to_jsonb;
-    result := format('constructor_args=>"%s",attributes=>"%s",arg_names=>"%s",compare_to_jsonb=>"%s",constructor_args_from_jsonb=>"%s"',
+    result := format('constructor_args=>"%s",attributes=>"%s",arg_names=>"%s",compare_to_jsonb=>"%s",constructor_args_from_jsonb=>"%s",meta_id_path=>"%s"',
         constructor_args,
         attributes,
         arg_names,
         compare_to_jsonb,
-        constructor_args_from_jsonb
+        constructor_args_from_jsonb,
+        meta_id_path
     )::public.hstore;
     -- raise notice 'result: %', result;
     return result;
 end;
 $$ language plpgsql;
 
+
 /**********************************************************************************
 create type meta2.relation_id as (schema_name text,name text);
 **********************************************************************************/
-
 create or replace function stmt_create_type (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare 
+declare
     stmt text := '';
     snippets public.hstore;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
     stmt := format('create type meta2.%I as (%s);', name || '_id', snippets['attributes']);
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+Constructor
+
+PostgreSQL composite types are instantiated via `row('public','my_table',
+'id')::column_id`, but this isn't very pretty, so each meta-id also has a
+constructor function whose arguments are the same as the arguments you would
+pass to row().
+
+Instead of:
+
+select row('public','my_table','my_column')::meta.column_id;
+
+This lets you do:
+
+select meta.column_id('public','my_table','my_column');
+
+
+Function output (for relation entity):
+```
+create or replace function meta2.meta_id(relation_id meta2.relation_id) returns meta2.meta_id as $_$
+    select meta2.meta_id('relation/' || quote_ident(relation_id.schema_name) || '/' || quote_ident(relation_id.name));
+$_$ language sql;
+```
+**********************************************************************************/
+create or replace function stmt_create_meta_id_constructor (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta2.meta_id(%I meta2.%I) returns meta2.meta_id as $_$ select meta2.meta_id(%L); $_$ language sql;', name || '_id', name || '_id', name, snippets['meta_id_path']);
     return stmt;
 end;
 $$ language plpgsql;
@@ -177,7 +258,7 @@ select meta2.relation_id(value->>'schema_name', value->>'name')
 $_$ immutable language sql;
 **********************************************************************************/
 create or replace function stmt_create_type_to_jsonb_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare 
+declare
     stmt text := '';
     snippets public.hstore;
     i integer := 1;
