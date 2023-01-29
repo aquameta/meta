@@ -80,7 +80,7 @@ each meta-id also has a constructor function whose arguments are the same as the
 
 Each composite type can be represented as other types as well:
 
-- `jsonb` - PostgreSQL's JSON type
+- `json` - PostgreSQL's JSON type
 - `jsonb` - PostgreSQL's binary JSON type
 - `meta_id` - A custom type for representing meta identifiers as text strings
 
@@ -106,10 +106,22 @@ select meta.column_id('public','my_table','id')::meta.schema_id;
 
 insert into meta_meta.pg_entity_component(position,name,"type") values (1,'type', 'type');
 insert into meta_meta.pg_entity_component(position,name,"type") values (2,'type_constructor_function','function');
+
+-- type to jsonb
 insert into meta_meta.pg_entity_component(position,name,"type") values (3,'type_to_jsonb_comparator_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_jsonb_comparator_op', 'op');
 insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_cast', 'cast');
+
+-- jsonb to type
+/*
+insert into meta_meta.pg_entity_component(position,name,"type") values (7,'jsonb_to_type_comparator_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (8,'jsonb_to_type_comparator_op', 'op');
+insert into meta_meta.pg_entity_component(position,name,"type") values (9,'jsonb_to_type_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (10,'jsonb_to_type_cast', 'cast');
+*/
+
+
 /*
 insert into meta_meta.pg_entity_component(name,"type") values ('relation', 'view');
 insert into meta_meta.pg_entity_component(name,"type") values ('relation_create_stmt_function', 'function');

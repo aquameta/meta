@@ -93,24 +93,8 @@ begin
 end;
 $$ language plpgsql;
 
-
-
-
-
-/*
-
-
- create type
-
-
- */
-
-
 /**********************************************************************************
-create type meta.relation_id as (
-    schema_id meta.schema_id,
-    name text
-);
+create type meta2.relation_id as (schema_name text,name text);
 **********************************************************************************/
 
 create or replace function stmt_create_type (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
@@ -126,11 +110,10 @@ $$ language plpgsql;
 
 
 /**********************************************************************************
-create function meta.relation_id(schema_name text, name text) returns meta.relation_id as $$
-    select row(schema_name, name)::meta.relation_id
-$$ language sql immutable;
+create function meta2.relation_id(schema_name text,name text) returns meta2.relation_id as $_$
+    select row(schema_name,name)::meta2.relation_id
+$_$ language sql immutable;
 **********************************************************************************/
-
 create or replace function stmt_create_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
     stmt text := '';
@@ -149,29 +132,11 @@ begin
 end;
 $$ language plpgsql;
 
-
-
-/*
-
-
- to jsonb
-
-
- */
-
-
-
-
 /**********************************************************************************
-create function meta.eq(
-    leftarg meta.relation_id,
-    rightarg jsonb
-) returns boolean as $$
-    select (leftarg).schema_id = rightarg->'schema_id' and
-           (leftarg).name = rightarg->>'name';
-$$ language sql;
+create function meta2.eq(leftarg meta2.relation_id, rightarg jsonb) returns boolean as
+    $_$select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'
+$_$ language sql;
 **********************************************************************************/
-
 create or replace function stmt_create_type_to_jsonb_comparator_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
     stmt text := '';
@@ -189,13 +154,8 @@ $$ language plpgsql;
 
 
 /**********************************************************************************
-create operator = (
-    leftarg = meta.foreign_key_id,
-    rightarg = jsonb,
-    procedure = meta.eq
-);
+create operator pg_catalog.= (leftarg = meta2.relation_id, rightarg = jsonb, procedure = meta2.eq);
 **********************************************************************************/
-
 create or replace function stmt_create_type_to_jsonb_comparator_op (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
     stmt text := '';
@@ -203,7 +163,7 @@ declare
     i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create operator = (leftarg = meta2.%I, rightarg = jsonb, procedure = meta2.eq);',
+    stmt := format('create operator pg_catalog.= (leftarg = meta2.%I, rightarg = jsonb, procedure = meta2.eq);',
         name || '_id'
     );
     return stmt;
@@ -212,24 +172,10 @@ $$ language plpgsql;
 
 
 /**********************************************************************************
-create function meta.relation_id(value jsonb) returns meta.relation_id as $$
-    select row(row(value->'schema_id'->>'name'), value->>'name')::meta.relation_id
-$$ immutable language sql;
-**********************************************************************************/
-
-/*
-want:
-create function meta2.function_id(value jsonb) returns meta2.function_id as $_$
-    select meta2.function_id(
-        value->>'schema_name',
-        value->>'name',
-        (select array_agg(value) from jsonb_array_elements_text(value->'parameters'))
-    )
+create function meta2.relation_id(value jsonb) returns meta2.relation_id as $_$
+select meta2.relation_id(value->>'schema_name', value->>'name')
 $_$ immutable language sql;
-*/
-
-
-
+**********************************************************************************/
 create or replace function stmt_create_type_to_jsonb_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare 
     stmt text := '';
@@ -249,11 +195,8 @@ $$ language plpgsql;
 
 
 /**********************************************************************************
-create cast (jsonb as meta.foreign_key_id)
-with function meta.foreign_key_id(jsonb)
-as assignment;
+create cast (jsonb as meta2.relation_id) with function meta2.relation_id(jsonb) as assignment;
 **********************************************************************************/
-
 create or replace function stmt_create_type_to_jsonb_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
     stmt text := '';
@@ -262,28 +205,6 @@ declare
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
     stmt := format('create cast (jsonb as meta2.%I) with function meta2.%I(jsonb) as assignment;',
-        name || '_id',
-        name || '_id'
-    );
-    return stmt;
-end;
-$$ language plpgsql;
-
-
-/**********************************************************************************
-create cast (meta.foreign_key_id as jsonb)
-with function meta.foreign_key_id(jsonb)
-as assignment;
-**********************************************************************************/
-
-create or replace function stmt_create_jsonb_to_type_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare
-    stmt text := '';
-    snippets public.hstore;
-    i integer := 1;
-begin
-    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create cast (meta2.%I as jsonb) with function meta2.%I(jsonb) as assignment;',
         name || '_id',
         name || '_id'
     );
