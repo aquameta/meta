@@ -27,7 +27,7 @@ create table meta_meta.pg_entity (
 
 /*
  * pg_entity_component
- * Every entity needs these components (type, casts to/from json with their operators and function, casts to/from text, a catalog view)
+ * Every entity needs these components (type, casts to/from jsonb with their operators and function, casts to/from text, a catalog view)
  */
 
 create table meta_meta.pg_entity_component (
@@ -80,7 +80,7 @@ each meta-id also has a constructor function whose arguments are the same as the
 
 Each composite type can be represented as other types as well:
 
-- `json` - PostgreSQL's JSON type
+- `jsonb` - PostgreSQL's JSON type
 - `jsonb` - PostgreSQL's binary JSON type
 - `meta_id` - A custom type for representing meta identifiers as text strings
 
@@ -106,10 +106,10 @@ select meta.column_id('public','my_table','id')::meta.schema_id;
 
 insert into meta_meta.pg_entity_component(position,name,"type") values (1,'type', 'type');
 insert into meta_meta.pg_entity_component(position,name,"type") values (2,'type_constructor_function','function');
-insert into meta_meta.pg_entity_component(position,name,"type") values (3,'type_to_json_comparator_function', 'function');
-insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_json_comparator_op', 'op');
-insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_json_type_constructor_function', 'function');
-insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_json_cast', 'cast');
+insert into meta_meta.pg_entity_component(position,name,"type") values (3,'type_to_jsonb_comparator_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_jsonb_comparator_op', 'op');
+insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_cast', 'cast');
 /*
 insert into meta_meta.pg_entity_component(name,"type") values ('relation', 'view');
 insert into meta_meta.pg_entity_component(name,"type") values ('relation_create_stmt_function', 'function');
