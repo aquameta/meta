@@ -314,8 +314,9 @@ create view meta.function as
 
         where r.routine_type = 'FUNCTION' and
             r.routine_name not in ('pg_identify_object', 'pg_sequence_parameters') and
-            p.ordinal_position > 0 and
-            p.parameter_mode like 'IN%' -- Includes IN and INOUT
+            /* allow nulls in cases of functions that have no parameters (like trigger functions) */
+            (p.ordinal_position > 0 or p.ordinal_position is null) and
+            (p.parameter_mode like 'IN%' or p.parameter_mode is null)
 
         group by r.routine_catalog,
             r.routine_schema,
@@ -338,8 +339,9 @@ create view meta.function as
                 p_in.specific_schema = q.specific_schema and
                 p_in.specific_name = q.specific_name
          where
-                p_in.ordinal_position > 0 and
-                p_in.parameter_mode = 'IN'
+			/* allow nulls in cases of functions that have no parameters (like trigger functions) */
+			(p_in.ordinal_position > 0 or p_in.ordinal_position is null) and
+			(p_in.parameter_mode = 'IN' or p_in.parameter_mode is null) -- includes IN and INOUT
 
     group by id,
         schema_id,
