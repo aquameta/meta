@@ -28,13 +28,13 @@ Each composite type can be represented as other types as well:
 - `meta_id` - A custom type for representing meta identifiers as text strings
 ******************************************************************************/
 
-begin;
-
 drop schema if exists meta_meta cascade;
 create schema meta_meta;
 
 drop schema if exists meta2 cascade;
 create schema meta2;
+
+begin;
 
 /*
  * pg_entity: 
@@ -119,12 +119,14 @@ insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_typ
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('connection',  '{"pid", "connection_start"}', '{"text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('constraint',  '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('constraint_unique', '{"schema_name", "table_name", "name", "column_names"}', '{"text","text","text","text"}');
-    -- generate_meta_meta_pg_entity('constraint_check',-- '{"schema_name", "table_name", "name", "column_names"}');
+insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('constraint_check', '{"schema_name", "table_name", "name", "column_names"}', '{"text","text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('extension',   '{"name"}', '{"text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_data_wrapper', '{"name"}', '{"text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_server', '{"name"}', '{"text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_table', '{"schema_name", "name"}', '{"text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_column', '{"schema_name", "name"}', '{"text","text"}');
+insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('table_privilege', '{"schema", "relation", "role"}', '{"text","text","text"}');
+insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('policy', '{"schema", "relation", "name"}', '{"text","text","text"}');
 
 /*
 
