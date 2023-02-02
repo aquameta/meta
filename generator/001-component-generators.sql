@@ -3,8 +3,12 @@ meta-meta-generator
 
 generates the source code for meta!
 
+-- the type and it's constructor
 type
 type_constructor_function
+
+-- meta_id text identifier for any meta.*_id
+meta_id_constructor
 
 -- jsonb stuff
 type_to_jsonb_comparator_function
@@ -15,7 +19,7 @@ type_to_jsonb_cast
 -- view
 relation
 relation_create_stmt_function
-create_relation_drop_stmt_create_function
+relation_drop_stmt_create_function
 
 -- view triggers
 relation_insert_trigger_function
@@ -29,7 +33,7 @@ relation_update_trigger
 begin;
 
 -- these functions are created in meta_meta (so they can be discarded)
-set search_path=meta_meta;
+set search_path=meta_meta,public;
 
 /******************************************************************************
 component_statement()
@@ -55,6 +59,7 @@ create or replace function component_statement(entity text, component text) retu
 declare
 stmt text;
 begin
+    -- raise notice '------------- component_statement(%,%)', entity, component;
     execute format('
     select %I(name, constructor_arg_names, constructor_arg_types)
     from meta_meta.pg_entity e
@@ -73,7 +78,7 @@ $$ language plpgsql;
 create or replace function stmt_snippets(name text, constructor_arg_names text[], constructor_arg_types text[]) returns public.hstore as $$
 declare
     arg_name text;
-    result public.hstore;
+    result public.hstore := '{a=>a}';
     i integer := 1;
 
     -- snippets
@@ -89,7 +94,7 @@ begin
         attributes :=       attributes                                  || format('%I %s', constructor_arg_names[i], constructor_arg_types[i]);
         constructor_args := constructor_args                            || format('%I %s', constructor_arg_names[i], constructor_arg_types[i]);
         arg_names :=        arg_names                                   || format('%I', constructor_arg_names[i]);
-        meta_id_path :=     meta_id_path                                || format('%I', constructor_arg_names[i]);
+        meta_id_path :=     meta_id_path                                || format('%s', constructor_arg_names[i]);
 
 		-- constructor args from json
 		if constructor_arg_types[i] = 'text[]' then
@@ -105,7 +110,7 @@ begin
                 || format('to_jsonb((leftarg).%I) = rightarg->%L', constructor_arg_names[i], constructor_arg_names[i]);
         else
             compare_to_jsonb :=  compare_to_jsonb ||
-                format('(leftarg).%I = rightarg->>%L', constructor_arg_names[i], constructor_arg_names[i]);
+                format('(leftarg).%I = (rightarg)->>%L', constructor_arg_names[i], constructor_arg_names[i]);
         end if;
 
         -- comma?
@@ -121,10 +126,25 @@ begin
         -- raise notice '    arg_names: %', arg_names;
     end loop;
 
-    -- raise notice 'results:::::';
-    -- raise notice 'attributes: %', attributes;
-    -- raise notice 'constructor_args: %', constructor_args;
-    -- raise notice 'compare_to_jsonb: %', compare_to_jsonb;
+    /*
+    raise notice 'results:::::';
+    raise notice 'attributes: %', attributes;
+    raise notice 'constructor_args: %', constructor_args;
+    raise notice 'compare_to_jsonb: %', compare_to_jsonb;
+    raise notice 'meta_id_path: %', meta_id_path;
+    */
+
+
+    /* why is this necessary? */
+    set local search_path=meta_meta,public;
+
+    result := result || hstore('constructor_args', constructor_args);
+    result := result || hstore('attributes', attributes);
+    result := result || hstore('arg_names', arg_names);
+    result := result || hstore('compare_to_jsonb', compare_to_jsonb);
+    result := result || hstore('constructor_args_from_jsonb', constructor_args_from_jsonb);
+    result := result || hstore('meta_id_path', meta_id_path);
+    /*
     result := format('constructor_args=>"%s",attributes=>"%s",arg_names=>"%s",compare_to_jsonb=>"%s",constructor_args_from_jsonb=>"%s",meta_id_path=>"%s"',
         constructor_args,
         attributes,
@@ -132,8 +152,10 @@ begin
         compare_to_jsonb,
         constructor_args_from_jsonb,
         meta_id_path
-    )::public.hstore;
-    -- raise notice 'result: %', result;
+    );
+    */
+
+    -- raise notice 'SNIPPETS result: %', result;
     return result;
 end;
 $$ language plpgsql;
@@ -148,7 +170,9 @@ declare
     snippets public.hstore;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    -- raise notice 'stmt_create_type gets snippets %', snippets;
     stmt := format('create type meta2.%I as (%s);', name || '_id', snippets['attributes']);
+    -- raise notice 'stmt_create_type produceds stmt %', stmt;
     return stmt;
 end;
 $$ language plpgsql;
@@ -244,7 +268,7 @@ declare
     i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create operator pg_catalog.= (leftarg = meta2.%I, rightarg = jsonb, procedure = meta2.eq);',
+    stmt := format('create operator meta2.= (leftarg = meta2.%I, rightarg = jsonb, procedure = meta2.eq);',
         name || '_id'
     );
     return stmt;

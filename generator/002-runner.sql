@@ -10,4 +10,3 @@ from pg_entity e, pg_entity_component c
 order by e.name, c.position;
 
 commit;
-
