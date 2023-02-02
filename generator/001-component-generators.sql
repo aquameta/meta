@@ -110,7 +110,7 @@ begin
                 || format('to_jsonb((leftarg).%I) = rightarg->%L', constructor_arg_names[i], constructor_arg_names[i]);
         else
             compare_to_jsonb :=  compare_to_jsonb ||
-                format('(leftarg).%I = (rightarg)->>%L', constructor_arg_names[i], constructor_arg_names[i]);
+                format('((leftarg).%I)::text = (rightarg)->>%L', constructor_arg_names[i], constructor_arg_names[i]);
         end if;
 
         -- comma?
