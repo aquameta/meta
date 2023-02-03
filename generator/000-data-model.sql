@@ -34,6 +34,7 @@ create schema meta_meta;
 drop schema if exists meta2 cascade;
 create schema meta2;
 
+create extension if not exists hstore schema public;
 begin;
 
 /*
@@ -142,6 +143,22 @@ insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_
 insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_comparator_op', 'op');
 insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (7,'type_to_jsonb_cast', 'cast');
+
+-- type to schema_id
+insert into meta_meta.pg_entity_component(position,name,"type") values (20,'type_to_schema_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (21,'type_to_schema_cast', 'cast');
+
+-- type to relation_id
+insert into meta_meta.pg_entity_component(position,name,"type") values (22,'type_to_relation_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (23,'type_to_relation_cast', 'cast');
+
+-- type to column_id
+insert into meta_meta.pg_entity_component(position,name,"type") values (24,'type_to_column_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (25,'type_to_column_cast', 'cast');
+
+-- type to row_id
+insert into meta_meta.pg_entity_component(position,name,"type") values (26,'type_to_row_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (27,'type_to_row_cast', 'cast');
 
 /*
 insert into meta_meta.pg_entity_component(name,"type") values ('relation', 'view');

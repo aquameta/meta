@@ -57,7 +57,7 @@ order by e.name, c.position;
 
 create or replace function component_statement(entity text, component text) returns text as $$
 declare
-stmt text;
+    stmt text;
 begin
     -- raise notice '------------- component_statement(%,%)', entity, component;
     execute format('
@@ -247,7 +247,6 @@ create or replace function stmt_create_type_to_jsonb_comparator_function (name t
 declare
     stmt text := '';
     snippets public.hstore;
-    i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
     stmt := format('create function meta2.eq(leftarg meta2.%I, rightarg jsonb) returns boolean as $_$%s$_$ language sql;',
@@ -265,10 +264,7 @@ create operator pg_catalog.= (leftarg = meta2.relation_id, rightarg = jsonb, pro
 create or replace function stmt_create_type_to_jsonb_comparator_op (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
     stmt text := '';
-    snippets public.hstore;
-    i integer := 1;
 begin
-    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
     stmt := format('create operator meta2.= (leftarg = meta2.%I, rightarg = jsonb, procedure = meta2.eq);',
         name || '_id'
     );
@@ -286,7 +282,6 @@ create or replace function stmt_create_type_to_jsonb_type_constructor_function (
 declare
     stmt text := '';
     snippets public.hstore;
-    i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
     stmt := format('create function meta2.%I(value jsonb) returns meta2.%I as $_$select meta2.%I(%s) $_$ immutable language sql;',
@@ -306,10 +301,7 @@ create cast (jsonb as meta2.relation_id) with function meta2.relation_id(jsonb) 
 create or replace function stmt_create_type_to_jsonb_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
     stmt text := '';
-    snippets public.hstore;
-    i integer := 1;
 begin
-    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
     stmt := format('create cast (jsonb as meta2.%I) with function meta2.%I(jsonb) as assignment;',
         name || '_id',
         name || '_id'
@@ -318,5 +310,111 @@ begin
 end;
 $$ language plpgsql;
 
+/*
+insert into meta_meta.pg_entity_component(position,name,"type") values (8,'type_to_schema_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (9,'type_to_schema_cast', 'cast');
+
+
+create function meta2.column_id_to_schema_id(meta2.column_id) returns meta2.schema_id as $_$select meta2.schema_id((column_id).schema_name) $_$ immutable language sql;
+*/
+
+/**********************************************************************************
+**********************************************************************************/
+create or replace function stmt_create_type_to_schema_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create function meta2.%I(%I meta2.%I) returns meta2.schema_id as $_$select meta2.schema_id((%I).schema_name) $_$ immutable language sql;',
+        name || '_id_to_schema_id',
+        name || '_id',
+        name || '_id',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+**********************************************************************************/
+create or replace function stmt_create_type_to_schema_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create cast (meta2.%I as meta2.schema_id) with function meta2.%I(meta2.%I) as assignment;',
+        name || '_id',
+        name || '_id_to_schema_id',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+/**********************************************************************************
+**********************************************************************************/
+create or replace function stmt_create_type_to_relation_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create function meta2.%I(%I meta2.%I) returns meta2.relation_id as $_$select meta2.relation_id((%I).schema_name, (%I).relation_name) $_$ immutable language sql;',
+        name || '_id_to_relation_id',
+        name || '_id',
+        name || '_id',
+        name || '_id',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+**********************************************************************************/
+create or replace function stmt_create_type_to_relation_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create cast (meta2.%I as meta2.relation_id) with function meta2.%I(meta2.%I) as assignment;',
+        name || '_id',
+        name || '_id_to_relation_id',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+/**********************************************************************************
+**********************************************************************************/
+create or replace function stmt_create_type_to_column_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create function meta2.%I(%I meta2.%I) returns meta2.column_id as $_$select meta2.column_id((%I).schema_name, (%I).relation_name, (%I).column_name) $_$ immutable language sql;',
+        name || '_id_to_column_id',
+        name || '_id',
+        name || '_id',
+        name || '_id',
+        name || '_id',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+**********************************************************************************/
+create or replace function stmt_create_type_to_column_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create cast (meta2.%I as meta2.column_id) with function meta2.%I(meta2.%I) as assignment;',
+        name || '_id',
+        name || '_id_to_column_id',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
 
 commit;
