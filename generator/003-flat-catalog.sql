@@ -607,7 +607,6 @@ from (
 /******************************************************************************
  * meta.connection
  *****************************************************************************/
- /*
 create view meta2.connection as
    select meta2.connection_id(psa.pid, psa.backend_start) as id,
           meta2.role_id(psa.usename::text) as role_id,
@@ -626,7 +625,7 @@ create view meta2.connection as
           psa.wait_event as wait_event,
           psa.wait_event_type as wait_event_type
    from pg_stat_activity psa;
-   */
+
 
 
 /******************************************************************************
@@ -690,7 +689,6 @@ create view meta2.extension as
 /******************************************************************************
  * meta.foreign_data_wrapper
  *****************************************************************************/
-/*
 create view meta2.foreign_data_wrapper as
     select id,
            name::text,
@@ -733,12 +731,10 @@ create view meta2.foreign_data_wrapper as
              handler_id,
              validator_id;
 
-*/
 
 /******************************************************************************
  * meta.foreign_server
  *****************************************************************************/
-/*
 create view meta2.foreign_server as
     select id,
            foreign_data_wrapper_id,
@@ -749,7 +745,7 @@ create view meta2.foreign_server as
 
     from (
         select meta2.foreign_server_id(srvname) as id,
-               meta2.foreign_data_wrapper(fdwname) as foreign_data_wrapper_id,
+               meta2.foreign_data_wrapper_id(fdwname) as foreign_data_wrapper_id,
                srvname as name,
                srvtype as "type",
                srvversion as version,
@@ -766,7 +762,7 @@ create view meta2.foreign_server as
              "type",
              version;
 
-*/
+
 
 /******************************************************************************
  * meta.foreign_table

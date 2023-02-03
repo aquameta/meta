@@ -102,7 +102,8 @@ begin
                 format('(select array_agg(value) from jsonb_array_elements_text(value->%L))', constructor_arg_names[i]);
 		else
 			constructor_args_from_jsonb :=  constructor_args_from_jsonb ||
-                format('value->>%L', constructor_arg_names[i]);
+                -- format('value->>%L', constructor_arg_names[i]);
+                format('(value->>%L)::%I', constructor_arg_names[i], constructor_arg_types[i]);
 		end if;
         -- compare to jsonb
         if constructor_arg_types[i] = 'text[]' then

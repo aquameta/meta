@@ -441,7 +441,7 @@ create function meta2.column_insert() returns trigger as $$
         perform meta2.require_one(public.hstore(NEW), array['relation_id', 'schema_name']);
         perform meta2.require_one(public.hstore(NEW), array['relation_id', 'relation_name']);
 
-        execute meta2.stmt_column_create(coalesce(NEW.schema_name, ((NEW.relation_id).schema_id).name), coalesce(NEW.relation_name, (NEW.relation_id).name), NEW.name, NEW.type_name, NEW.nullable, NEW."default", NEW.primary_key);
+        execute meta2.stmt_column_create(coalesce(NEW.schema_name, ((NEW.relation_id).schema_name)), coalesce(NEW.relation_name, (NEW.relation_id).name), NEW.name, NEW.type_name, NEW.nullable, NEW."default", NEW.primary_key);
 
         return NEW;
     end;
@@ -546,7 +546,7 @@ create function meta2.foreign_key_insert() returns trigger as $$
         perform meta2.require_one(public.hstore(NEW), array['table_id', 'table_name']);
 
         execute meta2.stmt_foreign_key_create(
-                    coalesce(NEW.schema_name, ((NEW.table_id).schema_id).name),
+                    coalesce(NEW.schema_name, ((NEW.table_id).schema_name)),
                     coalesce(NEW.table_name, (NEW.table_id).name),
                     NEW.name, NEW.from_column_ids, NEW.to_column_ids, NEW.on_update, NEW.on_delete
                 );
@@ -567,7 +567,7 @@ create function meta2.foreign_key_update() returns trigger as $$
 
         execute meta2.stmt_foreign_key_drop(OLD.schema_name, OLD.table_name, OLD.name);
         execute meta2.stmt_foreign_key_create(
-                    coalesce(NEW.schema_name, ((NEW.table_id).schema_id).name),
+                    coalesce(NEW.schema_name, ((NEW.table_id).schema_name)),
                     coalesce(NEW.table_name, (NEW.table_id).name),
                     NEW.name, NEW.from_column_ids, NEW.to_column_ids, NEW.on_update, NEW.on_delete
                 );
@@ -729,10 +729,10 @@ create function meta2.trigger_insert() returns trigger as $$
         perform meta2.require_one(public.hstore(NEW), array['relation_id', 'relation_name']);
 
         execute meta2.stmt_trigger_create(
-                    coalesce(NEW.schema_name, ((NEW.relation_id).schema_id).name),
+                    coalesce(NEW.schema_name, ((NEW.relation_id).schema_name)),
                     coalesce(NEW.relation_name, (NEW.relation_id).name),
                     NEW.name,
-                    ((NEW.function_id).schema_id).name,
+                    ((NEW.function_id).schema_name),
                     (NEW.function_id).name,
                     NEW."when", NEW."insert", NEW."update", NEW."delete", NEW."truncate", NEW."level"
                 );
@@ -750,10 +750,10 @@ create function meta2.trigger_update() returns trigger as $$
 
         execute meta2.stmt_trigger_drop(OLD.schema_name, OLD.relation_name, OLD.name);
         execute meta2.stmt_trigger_create(
-                    coalesce(nullif(NEW.schema_name, OLD.schema_name), ((NEW.relation_id).schema_id).name),
+                    coalesce(nullif(NEW.schema_name, OLD.schema_name), ((NEW.relation_id).schema_name)),
                     coalesce(nullif(NEW.relation_name, OLD.relation_name), (NEW.relation_id).name),
                     NEW.name,
-                    ((NEW.function_id).schema_id).name,
+                    ((NEW.function_id).schema_name),
                     (NEW.function_id).name,
                     NEW."when", NEW."insert", NEW."update", NEW."delete", NEW."truncate", NEW."level"
                 );
@@ -969,7 +969,7 @@ create function meta2.table_privilege_insert() returns trigger as $$
         perform meta2.require_all(public.hstore(NEW), array['type']);
 
         execute meta2.stmt_table_privilege_create(
-        coalesce(NEW.schema_name, ((NEW.table_id).schema_id).name),
+        coalesce(NEW.schema_name, (NEW.table_id).schema_name),
         coalesce(NEW.table_name, (NEW.table_id).name),
         coalesce(NEW.role_name, (NEW.role_id).name),
         NEW.type);
@@ -989,7 +989,7 @@ create function meta2.table_privilege_update() returns trigger as $$
         execute meta2.stmt_table_privilege_drop(OLD.schema_name, OLD.table_name, OLD.role_name, OLD.type);
 
         execute meta2.stmt_table_privilege_create(
-        coalesce(NEW.schema_name, ((NEW.table_id).schema_id).name),
+        coalesce(NEW.schema_name, (NEW.table_id).schema_name),
         coalesce(NEW.table_name, (NEW.table_id).name),
         coalesce(NEW.role_name, (NEW.role_id).name),
         NEW.type);
@@ -1011,7 +1011,6 @@ $$ language plpgsql;
  * meta2.policy
  *****************************************************************************/
 
-/*
 create function meta2.stmt_policy_create(schema_name text, relation_name text, policy_name text, command meta2.siuda, "using" text, "check" text) returns text as $$
     select  'create policy ' || quote_ident(policy_name) || ' on ' || quote_ident(schema_name) || '.' || quote_ident(relation_name) ||
             case when command is not null then ' for ' || command::text
@@ -1053,7 +1052,7 @@ create function meta2.policy_insert() returns trigger as $$
         perform meta2.require_one(public.hstore(NEW), array['relation_id', 'schema_name']);
         perform meta2.require_one(public.hstore(NEW), array['relation_id', 'relation_name']);
 
-        execute meta2.stmt_policy_create(coalesce(NEW.schema_name, ((NEW.relation_id).schema_id).name), coalesce(NEW.relation_name, (NEW.relation_id).name), NEW.name, NEW.command, NEW."using", NEW."check");
+        execute meta2.stmt_policy_create(coalesce(NEW.schema_name, ((NEW.relation_id).schema_name)), coalesce(NEW.relation_name, (NEW.relation_id).name), NEW.name, NEW.command, NEW."using", NEW."check");
 
         return NEW;
     end;
@@ -1099,14 +1098,12 @@ create function meta2.policy_delete() returns trigger as $$
         return OLD;
     end;
 $$ language plpgsql;
-*/
 
 
 /******************************************************************************
  * meta2.policy_role
  *****************************************************************************/
 
-/*
 create function meta2.stmt_policy_role_create(schema_name text, relation_name text, policy_name text, role_name text) returns text as $$
     select  'alter policy ' || quote_ident(policy_name) || ' on ' || quote_ident(schema_name) || '.' || quote_ident(relation_name) ||
         ' to ' ||
@@ -1164,8 +1161,8 @@ create function meta2.policy_role_insert() returns trigger as $$
         perform meta2.require_one(public.hstore(NEW), array['policy_id', 'relation_id', 'schema_name']);
 
         execute meta2.stmt_policy_role_create(
-        coalesce(NEW.schema_name, ((NEW.relation_id).schema_id).name, (((NEW.policy_id).relation_id).schema_id).name),
-        coalesce(NEW.relation_name, (NEW.relation_id).name, ((NEW.policy_id).relation_id).name),
+        coalesce(NEW.schema_name, ((NEW.relation_id).schema_name), (((NEW.policy_id).relation_id).schema_name)),
+        coalesce(NEW.relation_name, (NEW.relation_id).name, ((NEW.policy_id).relation_name)),
         coalesce(NEW.policy_name, (NEW.policy_id).name),
         coalesce(NEW.role_name, (NEW.role_id).name));
 
@@ -1185,12 +1182,12 @@ create function meta2.policy_role_update() returns trigger as $$
         perform meta2.require_one(public.hstore(NEW), array['policy_id', 'relation_id', 'schema_name']);
 
     -- delete old policy_role
-        execute meta2.stmt_policy_role_drop((((OLD.policy_id).relation_id).schema_id).name, ((OLD.policy_id).relation_id).name, (OLD.policy_id).name, (OLD.role_id).name);
+        execute meta2.stmt_policy_role_drop((OLD.policy_id).schema_name, (OLD.policy_id).relation_name, (OLD.policy_id).name, (OLD.role_id).name);
 
     -- create new policy_role
         execute meta2.stmt_policy_role_create(
-        coalesce(NEW.schema_name, ((NEW.relation_id).schema_id).name, (((NEW.policy_id).relation_id).schema_id).name),
-        coalesce(NEW.relation_name, (NEW.relation_id).name, ((NEW.policy_id).relation_id).name),
+        coalesce(NEW.schema_name, (NEW.relation_id).schema_name, (NEW.policy_id).schema_name),
+        coalesce(NEW.relation_name, (NEW.relation_id).name, (NEW.policy_id).relation_name),
         coalesce(NEW.policy_name, (NEW.policy_id).name),
         coalesce(NEW.role_name, (NEW.role_id).name));
 
@@ -1202,18 +1199,17 @@ $$ language plpgsql;
 
 create function meta2.policy_role_delete() returns trigger as $$
     begin
-        execute meta2.stmt_policy_role_drop((((OLD.policy_id).relation_id).schema_id).name, ((OLD.policy_id).relation_id).name, (OLD.policy_id).name, (OLD.role_id).name);
+        execute meta2.stmt_policy_role_drop((OLD.policy_id).schema_name, (OLD.policy_id).relation_name, (OLD.policy_id).name, (OLD.role_id).name);
         return OLD;
     end;
 $$ language plpgsql;
 
-*/
+
 
 /******************************************************************************
  * meta2.connection
  *****************************************************************************/
 
-/*
 create function meta2.stmt_connection_delete(unix_pid integer) returns text as $$
     select 'select pg_terminate_backend( ' || unix_pid || ')'
 $$ language sql;
@@ -1229,12 +1225,12 @@ $$ language plpgsql;
 create function meta2.current_connection_id() returns meta2.connection_id as $$
     select id from meta2.connection where unix_pid=pg_backend_pid();
 $$ language sql;
-*/
+
+
 
 /******************************************************************************
  * meta2.constraint_unique
  *****************************************************************************/
-
 create function meta2.constraint_unique_create(schema_name text, table_name text, name text, column_names text[]) returns text as $$
     select 'alter table ' || quote_ident(schema_name) || '.' || quote_ident(table_name) || ' add constraint ' || quote_ident(name) ||
            ' unique(' || array_to_string(column_names, ', ') || ')';
@@ -1258,7 +1254,7 @@ create function meta2.constraint_unique_insert() returns trigger as $$
         end if;
 
         execute meta2.constraint_unique_create(
-                    coalesce(NEW.schema_name, ((NEW.table_id).schema_id).name),
+                    coalesce(NEW.schema_name, (NEW.table_id).schema_name),
                     coalesce(NEW.table_name, (NEW.table_id).name),
                     NEW.name,
                     coalesce(NEW.column_names, (
@@ -1287,7 +1283,7 @@ create function meta2.constraint_unique_update() returns trigger as $$
 
         execute meta2.constraint_unique_drop(OLD.schema_name, OLD.table_name, OLD.name);
         execute meta2.constraint_unique_create(
-                    coalesce(nullif(NEW.schema_name, OLD.schema_name), ((NEW.table_id).schema_id).name),
+                    coalesce(nullif(NEW.schema_name, OLD.schema_name), (NEW.table_id).schema_name),
                     coalesce(nullif(NEW.table_name, OLD.table_name), (NEW.table_id).name),
                     NEW.name,
                     coalesce(nullif(NEW.column_names, OLD.column_names), (
@@ -1333,7 +1329,7 @@ create function meta2.constraint_check_insert() returns trigger as $$
         perform meta2.require_one(public.hstore(NEW), array['table_id', 'table_name']);
 
         execute meta2.constraint_check_create(
-                    coalesce(NEW.schema_name, ((NEW.table_id).schema_id).name),
+                    coalesce(NEW.schema_name, (NEW.table_id).schema_name),
                     coalesce(NEW.table_name, (NEW.table_id).name),
                     NEW.name, NEW.check_clause
                 );
@@ -1351,7 +1347,7 @@ create function meta2.constraint_check_update() returns trigger as $$
 
         execute meta2.constraint_check_drop(OLD.schema_name, OLD.table_name, OLD.name);
         execute meta2.constraint_check_create(
-                    coalesce(nullif(NEW.schema_name, OLD.schema_name), ((NEW.table_id).schema_id).name),
+                    coalesce(nullif(NEW.schema_name, OLD.schema_name), (NEW.table_id).schema_name),
                     coalesce(nullif(NEW.table_name, OLD.table_name), (NEW.table_id).name),
                     NEW.name, NEW.check_clause
                 );
@@ -1456,7 +1452,6 @@ $$ language plpgsql;
 /******************************************************************************
  * meta2.foreign_data_wrapper
  *****************************************************************************/
- /*
 
 create function meta2.stmt_foreign_data_wrapper_create(
     name text,
@@ -1465,8 +1460,8 @@ create function meta2.stmt_foreign_data_wrapper_create(
     options public.hstore
 ) returns text as $$
     select 'create foreign data wrapper ' || quote_ident(name)
-           || coalesce(' handler ' || quote_ident((handler_id).schema_id.name) || '.'  || quote_ident((handler_id).name), ' no handler ')
-           || coalesce(' validator ' || quote_ident((validator_id).schema_id.name) || '.'  || quote_ident((validator_id).name), ' no validator ')
+           || coalesce(' handler ' || quote_ident((handler_id).schema_name) || '.'  || quote_ident((handler_id).name), ' no handler ')
+           || coalesce(' validator ' || quote_ident((validator_id).schema_name) || '.'  || quote_ident((validator_id).name), ' no validator ')
            || coalesce(' options (' || (
                select string_agg(key || ' ' || quote_literal(value), ',') from public.each(options)
            ) || ')', '');
@@ -1487,8 +1482,8 @@ create function meta2.stmt_foreign_data_wrapper_alter(
     validator_id meta2.function_id
 ) returns text as $$
     select 'alter foreign data wrapper ' || quote_ident(name)
-           || coalesce(' handler ' || quote_ident((handler_id).schema_id.name) || '.'  || quote_ident((handler_id).name), ' no handler ')
-           || coalesce(' validator ' || quote_ident((validator_id).schema_id.name) || '.'  || quote_ident((validator_id).name), ' no validator ');
+           || coalesce(' handler ' || quote_ident((handler_id).schema_name) || '.'  || quote_ident((handler_id).name), ' no handler ')
+           || coalesce(' validator ' || quote_ident((validator_id).schema_name) || '.'  || quote_ident((validator_id).name), ' no validator ');
 $$ language sql immutable;
 
 
@@ -1578,14 +1573,12 @@ create function meta2.foreign_data_wrapper_delete() returns trigger as $$
     end;
 $$ language plpgsql;
 
-*/
 
 
 /******************************************************************************
  * meta2.foreign_server
  *****************************************************************************/
 
-/*
 create function meta2.stmt_foreign_server_create(
     foreign_data_wrapper_id meta2.foreign_data_wrapper_id,
     name text,
@@ -1716,7 +1709,6 @@ create function meta2.foreign_server_delete() returns trigger as $$
     end;
 $$ language plpgsql;
 
-*/
 
 
 /******************************************************************************
@@ -1917,7 +1909,7 @@ create function meta2.foreign_column_insert() returns trigger as $$
         perform meta2.require_one(public.hstore(NEW), array['foreign_table_id', 'relation_name']);
 
         execute meta2.stmt_foreign_column_create(
-            coalesce(NEW.schema_name, ((NEW.foreign_table_id).schema_id).name),
+            coalesce(NEW.schema_name, (NEW.foreign_table_id).schema_name),
             coalesce(NEW.foreign_table_name, (NEW.foreign_table_id).name),
             NEW.name,
             NEW.type,
@@ -2035,7 +2027,6 @@ create trigger meta_table_privilege_update_trigger instead of update on meta2.ta
 create trigger meta_table_privilege_delete_trigger instead of delete on meta2.table_privilege for each row execute procedure meta2.table_privilege_delete();
 
 -- POLICY
-/*
 create trigger meta_policy_insert_trigger instead of insert on meta2.policy for each row execute procedure meta2.policy_insert();
 create trigger meta_policy_update_trigger instead of update on meta2.policy for each row execute procedure meta2.policy_update();
 create trigger meta_policy_delete_trigger instead of delete on meta2.policy for each row execute procedure meta2.policy_delete();
@@ -2044,12 +2035,9 @@ create trigger meta_policy_delete_trigger instead of delete on meta2.policy for 
 create trigger meta_policy_role_insert_trigger instead of insert on meta2.policy_role for each row execute procedure meta2.policy_role_insert();
 create trigger meta_policy_role_update_trigger instead of update on meta2.policy_role for each row execute procedure meta2.policy_role_update();
 create trigger meta_policy_role_delete_trigger instead of delete on meta2.policy_role for each row execute procedure meta2.policy_role_delete();
-*/
 
 -- CONNECTION
-/*
 create trigger meta_connection_delete_trigger instead of delete on meta2.connection for each row execute procedure meta2.connection_delete();
-*/
 
 -- CONSTRAINT UNIQUE
 create trigger meta_constraint_unique_insert_trigger instead of insert on meta2.constraint_unique for each row execute procedure meta2.constraint_unique_insert();
@@ -2072,7 +2060,6 @@ create trigger meta_extension_update_trigger instead of update on meta2.extensio
 create trigger meta_extension_delete_trigger instead of delete on meta2.extension for each row execute procedure meta2.extension_delete();
 
 -- FOREIGN DATA WRAPPER
-/*
 create trigger meta_foreign_data_wrapper_insert_trigger instead of insert on meta2.foreign_data_wrapper for each row execute procedure meta2.foreign_data_wrapper_insert();
 create trigger meta_foreign_data_wrapper_update_trigger instead of update on meta2.foreign_data_wrapper for each row execute procedure meta2.foreign_data_wrapper_update();
 create trigger meta_foreign_data_wrapper_delete_trigger instead of delete on meta2.foreign_data_wrapper for each row execute procedure meta2.foreign_data_wrapper_delete();
@@ -2091,4 +2078,3 @@ create trigger meta_foreign_table_delete_trigger instead of delete on meta2.fore
 create trigger meta_foreign_column_insert_trigger instead of insert on meta2.foreign_column for each row execute procedure meta2.foreign_column_insert();
 create trigger meta_foreign_column_update_trigger instead of update on meta2.foreign_column for each row execute procedure meta2.foreign_column_update();
 create trigger meta_foreign_column_delete_trigger instead of delete on meta2.foreign_column for each row execute procedure meta2.foreign_column_delete();
-*/
