@@ -31,8 +31,8 @@ Each composite type can be represented as other types as well:
 drop schema if exists meta_meta cascade;
 create schema meta_meta;
 
-drop schema if exists meta2 cascade;
-create schema meta2;
+drop schema if exists meta cascade;
+create schema meta;
 
 create extension if not exists hstore schema public;
 begin;
@@ -89,8 +89,8 @@ select meta.column_id('public','my_table','id')::meta.schema_id;
 
  */
 
-create type meta2.meta_id as (id text);
-create or replace function meta2.meta_id(id text) returns meta2.meta_id as $$
+create type meta.meta_id as (id text);
+create or replace function meta.meta_id(id text) returns meta.meta_id as $$
 begin
     -- validation
     return row(id);
@@ -157,8 +157,11 @@ insert into meta_meta.pg_entity_component(position,name,"type") values (24,'type
 insert into meta_meta.pg_entity_component(position,name,"type") values (25,'type_to_column_cast', 'cast');
 
 -- type to row_id
+-- this is only for field_id, nothing else has a row_id.
+/*
 insert into meta_meta.pg_entity_component(position,name,"type") values (26,'type_to_row_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (27,'type_to_row_cast', 'cast');
+*/
 
 /*
 insert into meta_meta.pg_entity_component(name,"type") values ('relation', 'view');
