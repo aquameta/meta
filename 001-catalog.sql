@@ -819,3 +819,22 @@ create or replace function meta.row_exists(in row_id meta.row_id, out answer boo
             answer := false;
     end;
 $$ language plpgsql;
+
+
+
+create or replace function meta.field_id_literal_value(field_id meta2.field_id) returns text as $$
+declare
+    literal_value text;
+begin
+	-- ew
+    execute 'select ' || quote_ident((field_id).column_name) || '::text'
+            || ' from ' || quote_ident((field_id).schema_name) || '.'
+                        || quote_ident((field_id).relation_name)
+            || ' where ' || quote_ident((field_id).pk_column_name)
+                         || '::text =' || quote_literal((field_id).pk_value)
+    into literal_value;
+
+    return literal_value;
+exception when others then return null;
+end
+$$ language plpgsql;
