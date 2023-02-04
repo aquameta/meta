@@ -242,4 +242,7 @@ create cast (meta2.trigger_id as meta2.relation_id) with function meta2.trigger_
 create function meta2.field_id_to_column_id(field_id meta2.field_id) returns meta2.column_id as $_$select meta2.column_id((field_id).schema_name, (field_id).relation_name, (field_id).column_name) $_$ immutable language sql;
 create cast (meta2.field_id as meta2.column_id) with function meta2.field_id_to_column_id(meta2.field_id) as assignment;
 
+create function meta2.field_id_to_row_id(field_id meta2.field_id) returns meta2.row_id as $_$select meta2.row_id((field_id).schema_name, (field_id).relation_name, (field_id).pk_column_name, (field_id).pk_value) $_$ immutable language sql;
+create cast (meta2.field_id as meta2.row_id) with function meta2.field_id_to_row_id(meta2.field_id) as assignment;
+
 commit;
