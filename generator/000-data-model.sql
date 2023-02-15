@@ -144,6 +144,12 @@ insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_
 insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (7,'type_to_jsonb_cast', 'cast');
 
+-- type to jsonb
+insert into meta_meta.pg_entity_component(position,name,"type") values (8,'type_to_json_comparator_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (9,'type_to_json_comparator_op', 'op');
+insert into meta_meta.pg_entity_component(position,name,"type") values (10,'type_to_json_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (11,'type_to_json_cast', 'cast');
+
 -- type to schema_id
 insert into meta_meta.pg_entity_component(position,name,"type") values (20,'type_to_schema_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (21,'type_to_schema_cast', 'cast');

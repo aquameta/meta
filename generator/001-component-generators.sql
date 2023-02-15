@@ -82,11 +82,13 @@ declare
     i integer := 1;
 
     -- snippets
-    constructor_args text := '';           -- "schema_name text, relation_name text, name text"
-    attributes text := '';                 -- "schema_name text, relation_name text, name text"
-    arg_names text := '';                  -- "schema_name, relation_name, name"
+    constructor_args text := '';            -- "schema_name text, relation_name text, name text"
+    attributes text := '';                  -- "schema_name text, relation_name text, name text"
+    arg_names text := '';                   -- "schema_name, relation_name, name"
     compare_to_jsonb text := 'select ';     -- "select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'"
     constructor_args_from_jsonb text := ''; -- value->>'schema_name', value->>'name'
+    compare_to_json text := 'select ';      -- "select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'"
+    constructor_args_from_json text := '';  -- value->>'schema_name', value->>'name'
     meta_id_path text := name || '/';
 
 begin
@@ -96,7 +98,7 @@ begin
         arg_names :=        arg_names                                   || format('%I', constructor_arg_names[i]);
         meta_id_path :=     meta_id_path                                || format('%s', constructor_arg_names[i]);
 
-		-- constructor args from json
+		-- constructor args from jsonb
 		if constructor_arg_types[i] = 'text[]' then
 			constructor_args_from_jsonb :=  constructor_args_from_jsonb ||
                 format('(select array_agg(value) from jsonb_array_elements_text(value->%L))', constructor_arg_names[i]);
@@ -114,6 +116,24 @@ begin
                 format('((leftarg).%I)::text = (rightarg)->>%L', constructor_arg_names[i], constructor_arg_names[i]);
         end if;
 
+		-- constructor args from json
+		if constructor_arg_types[i] = 'text[]' then
+			constructor_args_from_json :=  constructor_args_from_json ||
+                format('(select array_agg(value) from json_array_elements_text(value->%L))', constructor_arg_names[i]);
+		else
+			constructor_args_from_json :=  constructor_args_from_json ||
+                -- format('value->>%L', constructor_arg_names[i]);
+                format('(value->>%L)::%I', constructor_arg_names[i], constructor_arg_types[i]);
+		end if;
+        -- compare to json
+        if constructor_arg_types[i] = 'text[]' then
+            compare_to_json :=  compare_to_json
+                || format('to_json((leftarg).%I)::text = (rightarg->%L)::text', constructor_arg_names[i], constructor_arg_names[i]);
+        else
+            compare_to_json :=  compare_to_json ||
+                format('((leftarg).%I)::text = ((rightarg)->>%L)::text', constructor_arg_names[i], constructor_arg_names[i]);
+        end if;
+
         -- comma?
         if i < array_length(constructor_arg_names,1) then
             attributes := attributes || ',';
@@ -121,6 +141,8 @@ begin
             arg_names := arg_names || ',';
             compare_to_jsonb := compare_to_jsonb || ' and ';
             constructor_args_from_jsonb := constructor_args_from_jsonb || ', ';
+            compare_to_json := compare_to_json || ' and ';
+            constructor_args_from_json := constructor_args_from_json || ', ';
             meta_id_path := meta_id_path || '/';
         end if;
         i := i+1;
@@ -144,6 +166,8 @@ begin
     result := result || hstore('arg_names', arg_names);
     result := result || hstore('compare_to_jsonb', compare_to_jsonb);
     result := result || hstore('constructor_args_from_jsonb', constructor_args_from_jsonb);
+    result := result || hstore('compare_to_json', compare_to_json);
+    result := result || hstore('constructor_args_from_json', constructor_args_from_json);
     result := result || hstore('meta_id_path', meta_id_path);
     /*
     result := format('constructor_args=>"%s",attributes=>"%s",arg_names=>"%s",compare_to_jsonb=>"%s",constructor_args_from_jsonb=>"%s",meta_id_path=>"%s"',
@@ -238,6 +262,18 @@ begin
 end;
 $$ language plpgsql;
 
+
+/*
+ *
+ * json / jsonb
+ *
+ */
+
+
+
+
+
+
 /**********************************************************************************
 create function meta.eq(leftarg meta.relation_id, rightarg jsonb) returns boolean as
     $_$select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'
@@ -309,6 +345,92 @@ begin
     return stmt;
 end;
 $$ language plpgsql;
+
+/*
+ *
+ * the next four are just copy/pasta of the previous four, but for json.
+ *
+ */
+
+
+/**********************************************************************************
+create function meta.eq(leftarg meta.relation_id, rightarg json) returns boolean as
+    $_$select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'
+$_$ language sql;
+**********************************************************************************/
+create or replace function stmt_create_type_to_json_comparator_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta.eq(leftarg meta.%I, rightarg json) returns boolean as $_$%s$_$ language sql;',
+        name || '_id',
+        snippets['compare_to_json']
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create operator pg_catalog.= (leftarg = meta.relation_id, rightarg = json, procedure = meta.eq);
+**********************************************************************************/
+create or replace function stmt_create_type_to_json_comparator_op (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create operator meta.= (leftarg = meta.%I, rightarg = json, procedure = meta.eq);',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create function meta.relation_id(value json) returns meta.relation_id as $_$
+select meta.relation_id(value->>'schema_name', value->>'name')
+$_$ immutable language sql;
+**********************************************************************************/
+create or replace function stmt_create_type_to_json_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta.%I(value json) returns meta.%I as $_$select meta.%I(%s) $_$ immutable language sql;',
+        name || '_id',
+        name || '_id',
+        name || '_id',
+        snippets['constructor_args_from_json']
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create cast (json as meta.relation_id) with function meta.relation_id(json) as assignment;
+**********************************************************************************/
+create or replace function stmt_create_type_to_json_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create cast (json as meta.%I) with function meta.%I(json) as assignment;',
+        name || '_id',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+/*
+ *
+ * end json/json
+ *
+ */
+
 
 
 /**********************************************************************************
