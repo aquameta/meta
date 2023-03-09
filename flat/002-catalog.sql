@@ -3,45 +3,45 @@ begin;
 /******************************************************************************
  * meta.siuda
  *****************************************************************************/
-create type meta2.siuda as enum ('select', 'insert', 'update', 'delete', 'all');
+create type meta.siuda as enum ('select', 'insert', 'update', 'delete', 'all');
 
-create function meta2.siuda(c char) returns meta2.siuda as $$
+create function meta.siuda(c char) returns meta.siuda as $$
 begin
     case c
         when 'r' then
-            return 'select'::meta2.siuda;
+            return 'select'::meta.siuda;
         when 'a' then
-            return 'insert'::meta2.siuda;
+            return 'insert'::meta.siuda;
         when 'w' then
-            return 'update'::meta2.siuda;
+            return 'update'::meta.siuda;
         when 'd' then
-            return 'delete'::meta2.siuda;
+            return 'delete'::meta.siuda;
         when '*' then
-            return 'all'::meta2.siuda;
+            return 'all'::meta.siuda;
     end case;
 end;
 $$ immutable language plpgsql;
 
 
-create cast (char as meta2.siuda)
-with function meta2.siuda(char)
+create cast (char as meta.siuda)
+with function meta.siuda(char)
 as assignment;
 
 
 /******************************************************************************
  * meta.schema
  *****************************************************************************/
-create view meta2.schema as
-    select meta2.schema_id(schema_name) id, schema_name::text as name
+create view meta.schema as
+    select meta.schema_id(schema_name) id, schema_name::text as name
     from information_schema.schemata;
 
 
 /******************************************************************************
  * meta.type
  *****************************************************************************/
-create view meta2.type as
+create view meta.type as
 select
-    meta2.type_id(n.nspname, pg_catalog.format_type(t.oid, NULL)) as id,
+    meta.type_id(n.nspname, pg_catalog.format_type(t.oid, NULL)) as id,
     t.typtype as "type",
     n.nspname::text as "schema_name",
     pg_catalog.format_type(t.oid, NULL)::text as "name",
@@ -59,8 +59,8 @@ order by 1, 2;
 /******************************************************************************
  * meta.cast
  *****************************************************************************/
-create view meta2.cast as
-SELECT meta2.cast_id(ts.typname, pg_catalog.format_type(castsource, NULL),tt.typname, pg_catalog.format_type(casttarget, NULL)) as id,
+create view meta.cast as
+SELECT meta.cast_id(ts.typname, pg_catalog.format_type(castsource, NULL),tt.typname, pg_catalog.format_type(casttarget, NULL)) as id,
        pg_catalog.format_type(castsource, NULL) AS "source type",
        pg_catalog.format_type(casttarget, NULL) AS "target type",
        (CASE WHEN castfunc = 0 THEN '(binary coercible)'
@@ -87,8 +87,8 @@ ORDER BY 1, 2;
 /******************************************************************************
  * meta.operator
  *****************************************************************************/
-create view meta2.operator as
-SELECT meta2.operator_id(n.nspname, o.oprname, trns.nspname, tr.typname, trns.nspname, tr.typname) as id,
+create view meta.operator as
+SELECT meta.operator_id(n.nspname, o.oprname, trns.nspname, tr.typname, trns.nspname, tr.typname) as id,
     n.nspname::text as schema_name,
     o.oprname::text as name,
     CASE WHEN o.oprkind='l' THEN NULL ELSE pg_catalog.format_type(o.oprleft, NULL) END AS "Left arg type",
@@ -111,9 +111,9 @@ ORDER BY 1, 2, 3, 4;
 /******************************************************************************
  * meta.sequence
  *****************************************************************************/
-create view meta2.sequence as
-    select meta2.sequence_id(sequence_schema, sequence_name) as id,
-           meta2.schema_id(sequence_schema) as schema_id,
+create view meta.sequence as
+    select meta.sequence_id(sequence_schema, sequence_name) as id,
+           meta.schema_id(sequence_schema) as schema_id,
            sequence_schema::text as schema_name,
            sequence_name::text as name,
            start_value::bigint,
@@ -128,9 +128,9 @@ create view meta2.sequence as
 /******************************************************************************
  * meta.table
  *****************************************************************************/
-create view meta2.table as
-    select meta2.relation_id(schemaname, tablename) as id,
-           meta2.schema_id(schemaname) as schema_id,
+create view meta.table as
+    select meta.relation_id(schemaname, tablename) as id,
+           meta.schema_id(schemaname) as schema_id,
            schemaname::text as schema_name,
            tablename::text as name,
            rowsecurity as rowsecurity
@@ -145,9 +145,9 @@ create view meta2.table as
 /******************************************************************************
  * meta.view
  *****************************************************************************/
-create view meta2.view as
-    select meta2.relation_id(table_schema, table_name) as id,
-           meta2.schema_id(table_schema) as schema_id,
+create view meta.view as
+    select meta.relation_id(table_schema, table_name) as id,
+           meta.schema_id(table_schema) as schema_id,
            table_schema::text as schema_name,
            table_name::text as name,
            view_definition::text as query
@@ -158,15 +158,15 @@ create view meta2.view as
 /******************************************************************************
  * meta.relation_column
  *****************************************************************************/
-create view meta2.relation_column as
-    select meta2.column_id(c.table_schema, c.table_name, c.column_name) as id,
-           meta2.relation_id(c.table_schema, c.table_name) as relation_id,
+create view meta.relation_column as
+    select meta.column_id(c.table_schema, c.table_name, c.column_name) as id,
+           meta.relation_id(c.table_schema, c.table_name) as relation_id,
            c.table_schema::text as schema_name,
            c.table_name::text as relation_name,
            c.column_name::text as name,
            c.ordinal_position::integer as position,
            quote_ident(c.udt_schema) || '.' || quote_ident(c.udt_name) as type_name,
-           meta2.type_id (c.udt_schema, c.udt_name) as "type_id",
+           meta.type_id (c.udt_schema, c.udt_name) as "type_id",
            (c.is_nullable = 'YES') as nullable,
            c.column_default::text as "default",
            k.column_name is not null or (c.table_schema = 'meta' and c.column_name = 'id') as primary_key
@@ -189,29 +189,29 @@ create view meta2.relation_column as
 /******************************************************************************
  * meta.column
  *****************************************************************************/
-create view meta2.column as
+create view meta.column as
     -- select c.id, c.relation_id as table_id, c.schema_name, c.relation_name, c.name, c.position, c.type_name, c.type_id, c.nullable, c.column_default, c.primary_key
     select c.*
-    from meta2.table t
-        join meta2.relation_column c on c.relation_id = t.id;
+    from meta.table t
+        join meta.relation_column c on c.relation_id = t.id;
 
 
 /******************************************************************************
  * meta.relation
  *****************************************************************************/
-create view meta2.relation as
-    select meta2.relation_id(t.table_schema, t.table_name) as id,
-           meta2.schema_id(t.table_schema) as schema_id,
+create view meta.relation as
+    select meta.relation_id(t.table_schema, t.table_name) as id,
+           meta.schema_id(t.table_schema) as schema_id,
            t.table_schema::text as schema_name,
            t.table_name::text as name,
            t.table_type::text as "type",
-           nullif(array_agg(c.id), array[null]::meta2.column_id[]) as primary_key_column_ids,
+           nullif(array_agg(c.id), array[null]::meta.column_id[]) as primary_key_column_ids,
            nullif(array_agg(c.name::text), array[null]::text[]) as primary_key_column_names
 
     from information_schema.tables t
 
-    left join meta2.relation_column c
-           on c.relation_id = meta2.relation_id(t.table_schema, t.table_name) and c.primary_key
+    left join meta.relation_column c
+           on c.relation_id = meta.relation_id(t.table_schema, t.table_name) and c.primary_key
 
     group by t.table_schema, t.table_name, t.table_type;
 
@@ -219,14 +219,14 @@ create view meta2.relation as
 /******************************************************************************
  * meta.foreign_key
  *****************************************************************************/
-create view meta2.foreign_key as
-    select meta2.foreign_key_id(tc.table_schema, tc.table_name, tc.constraint_name) as id,
-           meta2.relation_id(tc.table_schema, tc.table_name) as table_id,
+create view meta.foreign_key as
+    select meta.foreign_key_id(tc.table_schema, tc.table_name, tc.constraint_name) as id,
+           meta.relation_id(tc.table_schema, tc.table_name) as table_id,
            tc.table_schema::text as schema_name,
            tc.table_name::text as table_name,
            tc.constraint_name::text as name,
-           array_agg(meta2.column_id(kcu.table_schema, kcu.table_name, kcu.column_name)) as from_column_ids,
-           array_agg(meta2.column_id(ccu.table_schema, ccu.table_name, ccu.column_name)) as to_column_ids,
+           array_agg(meta.column_id(kcu.table_schema, kcu.table_name, kcu.column_name)) as from_column_ids,
+           array_agg(meta.column_id(ccu.table_schema, ccu.table_name, ccu.column_name)) as to_column_ids,
            update_rule::text as on_update,
            delete_rule::text as on_delete
 
@@ -255,7 +255,7 @@ create view meta2.foreign_key as
 /******************************************************************************
  * meta.function
  *****************************************************************************/
-create view meta2.function as
+create view meta.function as
     select id,
            schema_id,
            schema_name,
@@ -290,7 +290,7 @@ create view meta2.function as
            as returns_set
 
     from (
-        select meta2.function_id(
+        select meta.function_id(
                 r.routine_schema::text,
                 r.routine_name::text,
                 coalesce(
@@ -303,7 +303,7 @@ create view meta2.function as
                     array[]::text[]
                 )
             ) as id,
-            meta2.schema_id(r.routine_schema) as schema_id,
+            meta.schema_id(r.routine_schema) as schema_id,
             r.routine_schema as schema_name,
             r.routine_name as name,
             r.specific_catalog,
@@ -320,7 +320,7 @@ create view meta2.function as
             ) as parameters,
             r.routine_definition::text as definition,
             coalesce(nullif(r.data_type, 'USER-DEFINED'), r.type_udt_schema || '.' || r.type_udt_name) as return_type,
-            meta2.type_id(r.type_udt_schema, r.type_udt_name) as return_type_id,
+            meta.type_id(r.type_udt_schema, r.type_udt_name) as return_type_id,
             lower(r.external_language)::information_schema.character_data::text as language
 
         from information_schema.routines r
@@ -377,20 +377,20 @@ create view meta2.function as
 /******************************************************************************
  * meta.function_parameter
  *****************************************************************************/
-create view meta2.function_parameter as
+create view meta.function_parameter as
     select q.schema_id,
         q.schema_name,
         q.function_id,
         q.function_name,
         par.parameter_name as name,
-        meta2.type_id(par.udt_schema, par.udt_name) as type_id,
+        meta.type_id(par.udt_schema, par.udt_name) as type_id,
         quote_ident(par.udt_schema) || '.' || quote_ident(par.udt_name) as type_name,
         par.parameter_mode::text as "mode",
         par.ordinal_position::integer as position,
         par.parameter_default::text as "default"
 
     from (
-        select meta2.function_id(
+        select meta.function_id(
                 r.routine_schema::text,
                 r.routine_name::text,
                 coalesce(
@@ -403,7 +403,7 @@ create view meta2.function_parameter as
                     array[]::text[]
                 )
             ) as function_id,
-            meta2.schema_id(r.routine_schema) as schema_id,
+            meta.schema_id(r.routine_schema) as schema_id,
             r.routine_schema as schema_name,
             r.routine_name as function_name,
             r.specific_catalog,
@@ -445,8 +445,8 @@ create view meta2.function_parameter as
 /******************************************************************************
  * meta.trigger
  *****************************************************************************/
-create view meta2.trigger as
-    select meta2.trigger_id(t_pgn.nspname, pgc.relname, pg_trigger.tgname) as id,
+create view meta.trigger as
+    select meta.trigger_id(t_pgn.nspname, pgc.relname, pg_trigger.tgname) as id,
            t.id as relation_id,
            t_pgn.nspname::text as schema_name,
            pgc.relname::text as relation_name,
@@ -472,10 +472,10 @@ create view meta2.trigger as
     inner join pg_namespace t_pgn
             on t_pgn.oid = pgc.relnamespace
 
-    inner join meta2.schema t_s
+    inner join meta.schema t_s
             on t_s.name = t_pgn.nspname
 
-    inner join meta2.table t
+    inner join meta.table t
             on t.schema_id = t_s.id and
                t.name = pgc.relname
 
@@ -485,10 +485,10 @@ create view meta2.trigger as
     inner join pg_namespace f_pgn
             on f_pgn.oid = pgp.pronamespace
 
-    inner join meta2.schema f_s
+    inner join meta.schema f_s
             on f_s.name = f_pgn.nspname
 
-    inner join meta2.function f
+    inner join meta.function f
             on f.schema_id = f_s.id and
                f.name = pgp.proname;
 
@@ -496,8 +496,8 @@ create view meta2.trigger as
 /******************************************************************************
  * meta.role
  *****************************************************************************/
-create view meta2.role as
-   select meta2.role_id(pgr.rolname) as id,
+create view meta.role as
+   select meta.role_id(pgr.rolname) as id,
           pgr.rolname::text  as name,
           pgr.rolsuper       as superuser,
           pgr.rolinherit     as inherit,
@@ -512,7 +512,7 @@ create view meta2.role as
    inner join pg_authid pga
            on pgr.oid = pga.oid
     union
-   select meta2.role_id('0'::oid::regrole::text) as id,
+   select meta.role_id('0'::oid::regrole::text) as id,
     'PUBLIC' as name,
     null, null, null, null, null, null, null, null, null;
 
@@ -520,12 +520,12 @@ create view meta2.role as
 /******************************************************************************
  * meta.role_inheritance
  *****************************************************************************/
-create view meta2.role_inheritance as
+create view meta.role_inheritance as
 select
     r.rolname::text || '<-->' || r2.rolname::text as id,
-    r.rolname::text::meta2.role_id as role_id,
+    r.rolname::text::meta.role_id as role_id,
     r.rolname::text as role_name,
-    r2.rolname::text::meta2.role_id as member_role_id,
+    r2.rolname::text::meta.role_id as member_role_id,
     r2.rolname::text as member_role_name
 from pg_auth_members m
     join pg_roles r on r.oid = m.roleid
@@ -536,9 +536,9 @@ from pg_auth_members m
 /******************************************************************************
  * meta.table_privilege
  *****************************************************************************/
-create view meta2.table_privilege as
-select meta2.table_privilege_id(schema_name, table_name, (role_id).name, type) as id,
-    meta2.relation_id(schema_name, table_name) as table_id,
+create view meta.table_privilege as
+select meta.table_privilege_id(schema_name, table_name, (role_id).name, type) as id,
+    meta.relation_id(schema_name, table_name) as table_id,
     schema_name::text,
     table_name::text,
     role_id,
@@ -550,9 +550,9 @@ from (
     select
         case grantee
             when 'PUBLIC' then
-                meta2.role_id('-'::text)
+                meta.role_id('-'::text)
             else
-                meta2.role_id(grantee::text)
+                meta.role_id(grantee::text)
         end as role_id,
         table_schema as schema_name,
         table_name,
@@ -568,13 +568,13 @@ from (
  * meta.policy
  *****************************************************************************/
 
-create view meta2.policy as
-select meta2.policy_id(n.nspname, c.relname, p.polname) as id,
+create view meta.policy as
+select meta.policy_id(n.nspname, c.relname, p.polname) as id,
     p.polname::text as name,
-    meta2.relation_id(n.nspname, c.relname) as relation_id,
+    meta.relation_id(n.nspname, c.relname) as relation_id,
     c.relname::text as relation_name,
     n.nspname::text as schema_name,
-    p.polcmd::char::meta2.siuda as command,
+    p.polcmd::char::meta.siuda as command,
     pg_get_expr(p.polqual, p.polrelid, True) as using,
     pg_get_expr(p.polwithcheck, p.polrelid, True) as check
 from pg_policy p
@@ -585,10 +585,10 @@ from pg_policy p
 /******************************************************************************
  * meta.policy_role
  *****************************************************************************/
-create view meta2.policy_role as
+create view meta.policy_role as
 select
 --    meta.policy_id((relation_id).schema_name, (relation_id).name, policy_name)::text || '<-->' || role_id::text as id,
-    meta2.policy_id((relation_id).schema_name, (relation_id).name, policy_name) as policy_id,
+    meta.policy_id((relation_id).schema_name, (relation_id).name, policy_name) as policy_id,
     policy_name::text,
     relation_id,
     (relation_id).name as relation_name,
@@ -598,8 +598,8 @@ select
 from (
     select
         p.polname as policy_name,
-        meta2.relation_id(n.nspname, c.relname) as relation_id,
-        unnest(p.polroles::regrole[]::text[]::meta2.role_id[]) as role_id
+        meta.relation_id(n.nspname, c.relname) as relation_id,
+        unnest(p.polroles::regrole[]::text[]::meta.role_id[]) as role_id
     from pg_policy p
         join pg_class c on c.oid = p.polrelid
         join pg_namespace n on n.oid = c.relnamespace
@@ -609,9 +609,9 @@ from (
 /******************************************************************************
  * meta.connection
  *****************************************************************************/
-create view meta2.connection as
-   select meta2.connection_id(psa.pid, psa.backend_start) as id,
-          meta2.role_id(psa.usename::text) as role_id,
+create view meta.connection as
+   select meta.connection_id(psa.pid, psa.backend_start) as id,
+          meta.role_id(psa.usename::text) as role_id,
           psa.datname::text as database_name,
           psa.pid as unix_pid,
           psa.application_name,
@@ -633,13 +633,13 @@ create view meta2.connection as
 /******************************************************************************
  * meta.constraint_unique
  *****************************************************************************/
-create view meta2.constraint_unique as
-    select meta2.constraint_id(tc.table_schema, tc.table_name, tc.constraint_name) as id,
-           meta2.relation_id(tc.table_schema, tc.table_name) as table_id,
+create view meta.constraint_unique as
+    select meta.constraint_id(tc.table_schema, tc.table_name, tc.constraint_name) as id,
+           meta.relation_id(tc.table_schema, tc.table_name) as table_id,
            tc.table_schema::text as schema_name,
            tc.table_name::text as table_name,
            tc.constraint_name::text as name,
-           array_agg(meta2.column_id(ccu.table_schema, ccu.table_name, ccu.column_name)) as column_ids,
+           array_agg(meta.column_id(ccu.table_schema, ccu.table_name, ccu.column_name)) as column_ids,
            array_agg(ccu.column_name::text) as column_names
 
     from information_schema.table_constraints tc
@@ -657,9 +657,9 @@ create view meta2.constraint_unique as
 /******************************************************************************
  * meta.constraint_check
  *****************************************************************************/
-create view meta2.constraint_check as
-    select meta2.constraint_id(tc.table_schema, tc.table_name, tc.constraint_name) as id,
-           meta2.relation_id(tc.table_schema, tc.table_name) as table_id,
+create view meta.constraint_check as
+    select meta.constraint_id(tc.table_schema, tc.table_name, tc.constraint_name) as id,
+           meta.relation_id(tc.table_schema, tc.table_name) as table_id,
            tc.table_schema::text as schema_name,
            tc.table_name::text as table_name,
            tc.constraint_name::text as name,
@@ -676,9 +676,9 @@ create view meta2.constraint_check as
 /******************************************************************************
  * meta.extension
  *****************************************************************************/
-create view meta2.extension as
-    select meta2.extension_id(ext.extname) as id,
-           meta2.schema_id(pgn.nspname) as schema_id,
+create view meta.extension as
+    select meta.extension_id(ext.extname) as id,
+           meta.schema_id(pgn.nspname) as schema_id,
            pgn.nspname::text as schema_name,
            ext.extname::text as name,
            ext.extversion as version
@@ -691,7 +691,7 @@ create view meta2.extension as
 /******************************************************************************
  * meta.foreign_data_wrapper
  *****************************************************************************/
-create view meta2.foreign_data_wrapper as
+create view meta.foreign_data_wrapper as
     select id,
            name::text,
            handler_id,
@@ -699,7 +699,7 @@ create view meta2.foreign_data_wrapper as
            string_agg((quote_ident(opt[1]) || '=>' || replace(array_to_string(opt[2:array_length(opt, 1)], '='), ',', '\,')), ',')::public.hstore as options
 
     from (
-        select meta2.foreign_data_wrapper_id(fdwname) as id,
+        select meta.foreign_data_wrapper_id(fdwname) as id,
                fdwname as name,
                h_f.id as handler_id,
                v_f.id as validator_id,
@@ -713,7 +713,7 @@ create view meta2.foreign_data_wrapper as
         left join pg_namespace h_n
                on h_n.oid = p_h.pronamespace
 
-        left join meta2.function h_f
+        left join meta.function h_f
                on h_f.schema_name = h_n.nspname and
                   h_f.name = p_h.proname
 
@@ -723,7 +723,7 @@ create view meta2.foreign_data_wrapper as
         left join pg_namespace v_n
                on v_n.oid = p_v.pronamespace
 
-        left join meta2.function v_f
+        left join meta.function v_f
                on v_f.schema_name = v_n.nspname and
                   v_f.name = p_v.proname
     ) q
@@ -737,7 +737,7 @@ create view meta2.foreign_data_wrapper as
 /******************************************************************************
  * meta.foreign_server
  *****************************************************************************/
-create view meta2.foreign_server as
+create view meta.foreign_server as
     select id,
            foreign_data_wrapper_id,
            name::text,
@@ -746,8 +746,8 @@ create view meta2.foreign_server as
            string_agg((quote_ident(opt[1]) || '=>' || replace(array_to_string(opt[2:array_length(opt, 1)], '='), ',', '\,')), ',')::public.hstore as options
 
     from (
-        select meta2.foreign_server_id(srvname) as id,
-               meta2.foreign_data_wrapper_id(fdwname) as foreign_data_wrapper_id,
+        select meta.foreign_server_id(srvname) as id,
+               meta.foreign_data_wrapper_id(fdwname) as foreign_data_wrapper_id,
                srvname as name,
                srvtype as "type",
                srvversion as version,
@@ -769,7 +769,7 @@ create view meta2.foreign_server as
 /******************************************************************************
  * meta.foreign_table
  *****************************************************************************/
-create view meta2.foreign_table as
+create view meta.foreign_table as
     select id,
            foreign_server_id,
            schema_id,
@@ -778,9 +778,9 @@ create view meta2.foreign_table as
            string_agg((quote_ident(opt[1]) || '=>' || replace(array_to_string(opt[2:array_length(opt, 1)], '='), ',', '\,')), ',')::public.hstore as options
 
     from (
-        select meta2.relation_id(pgn.nspname, pgc.relname) as id,
-               meta2.schema_id(pgn.nspname) as schema_id,
-               meta2.foreign_server_id(pfs.srvname) as foreign_server_id,
+        select meta.relation_id(pgn.nspname, pgc.relname) as id,
+               meta.schema_id(pgn.nspname) as schema_id,
+               meta.foreign_server_id(pfs.srvname) as foreign_server_id,
                pgn.nspname as schema_name,
                pgc.relname as name,
                string_to_array(unnest(coalesce(ftoptions, array['']::text[])), '=') as opt
@@ -805,9 +805,9 @@ create view meta2.foreign_table as
  * meta.foreign_column
  *****************************************************************************/
 
-create view meta2.foreign_column as
-    select meta2.column_id(c.table_schema, c.table_name, c.column_name) as id,
-           meta2.relation_id(c.table_schema, c.table_name) as foreign_table_id,
+create view meta.foreign_column as
+    select meta.column_id(c.table_schema, c.table_name, c.column_name) as id,
+           meta.relation_id(c.table_schema, c.table_name) as foreign_table_id,
            c.table_schema::text as schema_name,
            c.table_name::text as foreign_table_name,
            c.column_name::text as name,
@@ -824,7 +824,7 @@ create view meta2.foreign_column as
                c.table_name = pgc.relname;
 
 
-create or replace function meta2.row_exists(in row_id meta2.row_id, out answer boolean) as $$
+create or replace function meta.row_exists(in row_id meta.row_id, out answer boolean) as $$
     declare
         stmt text;
     begin
@@ -849,7 +849,7 @@ commit;
 
 
 
-create or replace function meta2.field_id_literal_value(field_id meta2.field_id) returns text as $$
+create or replace function meta.field_id_literal_value(field_id meta.field_id) returns text as $$
 declare
     literal_value text;
 begin
