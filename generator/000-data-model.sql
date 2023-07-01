@@ -31,8 +31,10 @@ Each composite type can be represented as other types as well:
 drop schema if exists meta_meta cascade;
 create schema meta_meta;
 
+/*
 drop schema if exists meta cascade;
 create schema meta;
+*/
 
 create extension if not exists hstore schema public;
 begin;
@@ -89,6 +91,7 @@ select meta.column_id('public','my_table','id')::meta.schema_id;
 
  */
 
+create schema meta;
 create type meta.meta_id as (id text);
 create or replace function meta.meta_id(id text) returns meta.meta_id as $$
 begin
