@@ -28,13 +28,16 @@ Each composite type can be represented as other types as well:
 - `meta_id` - A custom type for representing meta identifiers as text strings
 ******************************************************************************/
 
-begin;
-
 drop schema if exists meta_meta cascade;
 create schema meta_meta;
 
-drop schema if exists meta2 cascade;
-create schema meta2;
+/*
+drop schema if exists meta cascade;
+create schema meta;
+*/
+
+create extension if not exists hstore schema public;
+begin;
 
 /*
  * pg_entity: 
@@ -88,8 +91,9 @@ select meta.column_id('public','my_table','id')::meta.schema_id;
 
  */
 
-create type meta2.meta_id as (id text);
-create or replace function meta2.meta_id(id text) returns meta2.meta_id as $$
+create schema meta;
+create type meta.meta_id as (id text);
+create or replace function meta.meta_id(id text) returns meta.meta_id as $$
 begin
     -- validation
     return row(id);
@@ -116,15 +120,17 @@ insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_typ
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('function',    '{"schema_name", "name", "parameters"}', '{"text","text","text[]"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('trigger',     '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('role',        '{"name"}', '{"text"}');
-insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('connection',  '{"pid", "connection_start"}', '{"text","text"}');
+insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('connection',  '{"pid", "connection_start"}', '{"int4","timestamptz"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('constraint',  '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('constraint_unique', '{"schema_name", "table_name", "name", "column_names"}', '{"text","text","text","text"}');
-    -- generate_meta_meta_pg_entity('constraint_check',-- '{"schema_name", "table_name", "name", "column_names"}');
+insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('constraint_check', '{"schema_name", "table_name", "name", "column_names"}', '{"text","text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('extension',   '{"name"}', '{"text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_data_wrapper', '{"name"}', '{"text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_server', '{"name"}', '{"text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_table', '{"schema_name", "name"}', '{"text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_column', '{"schema_name", "name"}', '{"text","text"}');
+insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('table_privilege', '{"schema_name", "relation_name", "role", "type"}', '{"text","text","text","text"}');
+insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('policy', '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
 
 /*
 
@@ -136,10 +142,35 @@ insert into meta_meta.pg_entity_component(position,name,"type") values (2,'type_
 insert into meta_meta.pg_entity_component(position,name,"type") values (3,'meta_id_constructor', 'function');
 
 -- type to jsonb
-insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_jsonb_comparator_function', 'function');
-insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_comparator_op', 'op');
-insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_type_constructor_function', 'function');
-insert into meta_meta.pg_entity_component(position,name,"type") values (7,'type_to_jsonb_cast', 'cast');
+--insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_jsonb_comparator_function', 'function');
+--insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_comparator_op', 'op');
+--insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_type_constructor_function', 'function');
+--insert into meta_meta.pg_entity_component(position,name,"type") values (7,'type_to_jsonb_cast', 'cast');
+
+-- type to jsonb
+insert into meta_meta.pg_entity_component(position,name,"type") values (8,'type_to_json_comparator_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (9,'type_to_json_comparator_op', 'op');
+insert into meta_meta.pg_entity_component(position,name,"type") values (10,'type_to_json_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (11,'type_to_json_cast', 'cast');
+
+-- type to schema_id
+insert into meta_meta.pg_entity_component(position,name,"type") values (20,'type_to_schema_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (21,'type_to_schema_cast', 'cast');
+
+-- type to relation_id
+insert into meta_meta.pg_entity_component(position,name,"type") values (22,'type_to_relation_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (23,'type_to_relation_cast', 'cast');
+
+-- type to column_id
+insert into meta_meta.pg_entity_component(position,name,"type") values (24,'type_to_column_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (25,'type_to_column_cast', 'cast');
+
+-- type to row_id
+-- this is only for field_id, nothing else has a row_id.
+/*
+insert into meta_meta.pg_entity_component(position,name,"type") values (26,'type_to_row_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (27,'type_to_row_cast', 'cast');
+*/
 
 /*
 insert into meta_meta.pg_entity_component(name,"type") values ('relation', 'view');
