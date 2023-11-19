@@ -254,38 +254,16 @@ create view meta.foreign_key as
  * meta.function
  *****************************************************************************/
 
-/*
-create type function_parameter as (
+create type meta.function_param as (
     name text,
-    type_id meta.type_id,
-    mode text, -- IN, OUT, INOUT -- use enum?
+    type_schema_name text,
+    type_name text,
+    -- mode text, -- IN, OUT, INOUT -- use enum?
     position integer,
     "default" text
 );
 
-
-create function returns_set()
-    -- hfs:
-    substring(pg_get_function_result((quote_ident(raw.routine_schema) || '.' || quote_ident(raw.routine_name) || '(' ||
-        array_to_string(
-            coalesce(
-                 nullif(
-                    array_agg(coalesce(lower(nullif(p_in.parameter_mode, 'IN')) || ' ', '')
-                              || coalesce(nullif(nullif(p_in.data_type, 'ARRAY'), 'USER-DEFINED'), p_in.udt_schema || '.' || p_in.udt_name)
-                              order by p_in.ordinal_position),
-                    array[null]
-                ),
-                array[]::text[]
-            ),
-            ', '
-        )
-    || ')')::regprocedure) from 1 for 6) = 'SETOF '
-        or (select proretset = 't' from pg_proc join pg_namespace on pg_proc.pronamespace = pg_namespace.oid where proname = q.name and nspname = q.schema_name limit 1)
-)
-    as returns_set
-*/
-
-create or replace view function2 as
+create view meta.function2 as
 with f as (
     select
         -- function
@@ -293,7 +271,6 @@ with f as (
         r.routine_name::text,
 
         -- function (specific) -- function names are not unique (w/o a type sig) but these are
-        r.specific_schema::text,
         r.specific_name::text,
 
         -- return type
@@ -302,7 +279,7 @@ with f as (
         r.type_udt_name::text,
 
         -- definition
-        -- r.routine_definition::text,
+        r.routine_definition::text,
 
         -- language
         lower(r.external_language)::information_schema.character_data::text as language
@@ -311,61 +288,93 @@ with f as (
 
     where r.routine_type = 'FUNCTION'
         and r.routine_name not in ('pg_identify_object', 'pg_sequence_parameters')
-        and r.routine_schema not in ('pg_catalog', 'information_schema', 'public')
+        -- and r.routine_schema not in ('pg_catalog', 'information_schema', 'public')
 )
 
 select
     meta.function_id(
         f.routine_schema,
         f.routine_name,
-        -- case when here
-        array_agg(quote_ident(f.type_udt_schema) || '.' || quote_ident(f.type_udt_name))
-    ) as id,
+        coalesce(
+            nullif(
+                array_agg( -- Array of types of the 'IN' parameters to this function
+                    coalesce( nullif( nullif(p.data_type, 'ARRAY'), 'USER-DEFINED'), p.udt_schema || '.' || p.udt_name)
+                    order by p.ordinal_position),
+                array[null]
+            ),
+            array[]::text[]
+        )
+	) as id,
     meta.schema_id(f.routine_schema) as schema_id,
     f.routine_schema as schema_name,
     f.routine_name as name,
-    -- f.routine_definition as definition,
-    f.language,
+
+	-- parameters - text array
+    array_remove(
+        array_agg(
+            case
+                when p.data_type is null then null --= 'ARRAY' or p.data_type = 'USER-DEFINED' then null
+                else row(p.parameter_name, p.udt_schema, p.udt_name, p.ordinal_position, p.parameter_default)::meta.function_param
+            end
+        ), null
+    ) as parameters,
+
+    -- definition
+    f.routine_definition as definition,
 
     -- return_type
     coalesce(f.type_udt_schema || '.' || f.type_udt_name) as return_type,
     meta.type_id(f.type_udt_schema, f.type_udt_name) as return_type_id,
 
-    -- parameters
-    array_agg(
-        quote_ident(f.type_udt_schema) || '.' || quote_ident(f.type_udt_name)
-        || ' - ' || p.parameter_mode
-    ) as parameters
 
+    -- language
+    f.language,
+
+
+    -- returns_set
+    substring(pg_get_function_result(
+		-- function name
+		(quote_ident(f.routine_schema) || '.' || quote_ident(f.routine_name) || '(' ||
+		-- funtion type sig
+        array_to_string(
+            coalesce(
+                 nullif(
+                    array_agg(coalesce(lower(nullif(p.parameter_mode, 'IN')) || ' ', '')
+                              || coalesce(nullif(nullif(p.data_type, 'ARRAY'), 'USER-DEFINED'), p.udt_schema || '.' || p.udt_name)
+                              order by p.ordinal_position),
+                    array[null]
+                ),
+                array[]::text[]
+            ),
+            ', '
+        )
+    || ')')::regprocedure) from 1 for 6) = 'SETOF '
+        or (select proretset = 't' from pg_proc join pg_namespace on pg_proc.pronamespace = pg_namespace.oid where proname = f.routine_name and nspname = f.routine_schema limit 1)
+    as returns_set
 
 from f
+    -- left join on params because sometimes functions don't have params
     left join information_schema.parameters p
-        on p.specific_schema = f.specific_schema
+        on p.specific_schema = f.routine_schema
             and p.specific_name = f.specific_name
 where
-        /* allow nulls in cases of functions that have no parameters (like trigger functions) */
+        -- allow null for position for functions have no parameters (like trigger functions)
         (p.ordinal_position > 0 or p.ordinal_position is null)
+        -- only IN and INOUT parameters
         and (p.parameter_mode like 'IN%' or p.parameter_mode is null)
 
 group by
     f.routine_schema,
     f.routine_name,
-    f.specific_schema,
     f.specific_name,
     f.type_udt_schema,
     f.type_udt_name,
-    -- f.routine_definition,
+    f.routine_definition,
     f.language
-    -- meta.returns_set(f.routine_schema, f.routine_name)
-
 ;
 
-        p.udt_schema as param_udt_schema,
-        p.udt_name as param_udt_name,
-        p.parameter_mode
 
-
-
+-- old version, to be replaced
 create view meta.function as
     select id,
            schema_id,
