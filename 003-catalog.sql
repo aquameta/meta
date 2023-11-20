@@ -253,7 +253,167 @@ create view meta.foreign_key as
 /******************************************************************************
  * meta.function
  *****************************************************************************/
+
+-- this is built to take raw vars from informatino_schema and consolidate the
+-- logic that generates a function parameter expr in one place.
+create or replace function meta.stmt_function_parameter_def(
+    parameter_name text, data_type text, udt_schema text, udt_name text, ordinal_position integer, parameter_default text
+) returns text as $$
+declare
+    argmode text := '';
+    argname text := '';
+    argtype text := '';
+    default_expr text := '';
+
+begin
+    -- parameter_name: the name, or null if it has none
+    -- data_type: Data type of the parameter, if it is a built-in type, or ARRAY if it is some array (in that case, see the view element_types), else USER-DEFINED (in that case, the type is identified in udt_name and associated columns).
+    -- udt_schema: the schema that the type is in
+    -- udt_name: Name of the data type of the parameter
+
+    -- argmode IN/OUT/INOUT TODO
+
+    -- argname
+    if parameter_name is not null and parameter_name != '' then
+        argname := quote_ident(parameter_name) || ' ';
+    end if;
+
+    -- argtype
+    if data_type = 'USER-DEFINED' or data_type = 'ARRAY' or data_type is null or data_type = '' then
+        argtype := quote_ident(udt_schema) || '.' || quote_ident(udt_name);
+        if data_type = 'ARRAY' then
+            argtype := argtype || '[]';
+        end if;
+        argtype := argtype || ' ';
+    else argtype := data_type || ' ';
+    end if;
+
+    -- default_expr
+    if default_expr is not null and default_expr != '' then
+        default_expr := 'default ' || parameter_default;
+    end if;
+
+    -- raise notice 'mode: %, name: %, type: %, default: %', argmode, argname, argtype, default_expr;
+
+    return trim(argmode || argname || argtype || default_expr);
+end;
+$$ language plpgsql;
+
+
+
 create view meta.function as
+with f as (
+    select
+        -- function
+        r.routine_schema::text,
+        r.routine_name::text,
+
+        -- function (specific) -- function names are not unique (w/o a type sig) but these are
+        r.specific_name::text,
+
+        -- return type
+        -- r.data_type, -- useless?
+        r.type_udt_schema::text,
+        r.type_udt_name::text,
+
+        -- definition
+        r.routine_definition::text,
+
+        -- language
+        lower(r.external_language)::information_schema.character_data::text as language
+
+    from information_schema.routines r
+
+    where r.routine_type = 'FUNCTION'
+        and r.routine_name not in ('pg_identify_object', 'pg_sequence_parameters')
+        -- and r.routine_schema not in ('pg_catalog', 'information_schema', 'public')
+)
+
+select
+    meta.function_id(
+        f.routine_schema,
+        f.routine_name,
+        coalesce(
+            nullif(
+                array_agg( -- Array of types of the 'IN' parameters to this function
+                    coalesce( nullif( nullif(p.data_type, 'ARRAY'), 'USER-DEFINED'), p.udt_schema || '.' || p.udt_name)
+                    order by p.ordinal_position),
+                array[null]
+            ),
+            array[]::text[]
+        )
+    ) as id,
+    meta.schema_id(f.routine_schema) as schema_id,
+    f.routine_schema as schema_name,
+    f.routine_name as name,
+
+    -- parameters - text array
+    -- remove null, when there's no params
+    array_remove(
+        -- agg parameters (if any)
+        array_agg(
+            case
+                when p.data_type is null then null --= 'ARRAY' or p.data_type = 'USER-DEFINED' then null
+                else meta.stmt_function_parameter_def(p.parameter_name, p.data_type, p.udt_schema, p.udt_name, p.ordinal_position::integer, p.parameter_default)
+            end
+        ), null
+    ) as parameters,
+
+    -- definition
+    f.routine_definition as definition,
+
+    -- return_type
+    coalesce(f.type_udt_schema || '.' || f.type_udt_name) as return_type,
+    meta.type_id(f.type_udt_schema, f.type_udt_name) as return_type_id,
+
+    -- language
+    f.language,
+
+    -- returns_set
+    substring(pg_get_function_result(
+        -- function name
+        (quote_ident(f.routine_schema) || '.' || quote_ident(f.routine_name) || '(' ||
+        -- funtion type sig
+        array_to_string(
+            coalesce(
+                 nullif(
+                    array_agg(coalesce(lower(nullif(p.parameter_mode, 'IN')) || ' ', '')
+                              || coalesce(nullif(nullif(p.data_type, 'ARRAY'), 'USER-DEFINED'), p.udt_schema || '.' || p.udt_name)
+                              order by p.ordinal_position),
+                    array[null]
+                ),
+                array[]::text[]
+            ),
+            ', '
+        )
+    || ')')::regprocedure) from 1 for 6) = 'SETOF '
+        or (select proretset = 't' from pg_proc join pg_namespace on pg_proc.pronamespace = pg_namespace.oid where proname = f.routine_name and nspname = f.routine_schema limit 1)
+    as returns_set
+
+from f
+    -- left join on params because sometimes functions don't have params
+    left join information_schema.parameters p
+        on p.specific_schema = f.routine_schema
+            and p.specific_name = f.specific_name
+where
+        -- allow null for position for functions have no parameters (like trigger functions)
+        (p.ordinal_position > 0 or p.ordinal_position is null)
+        -- only IN and INOUT parameters
+        and (p.parameter_mode like 'IN%' or p.parameter_mode is null)
+
+group by
+    f.routine_schema,
+    f.routine_name,
+    f.specific_name,
+    f.type_udt_schema,
+    f.type_udt_name,
+    f.routine_definition,
+    f.language
+;
+
+
+-- old version, to be replaced
+create view meta.function_old as
     select id,
            schema_id,
            schema_name,
@@ -847,7 +1007,7 @@ create or replace function meta.field_id_literal_value(field_id meta.field_id) r
 declare
     literal_value text;
 begin
-	-- ew
+    -- ew
     execute 'select ' || quote_ident((field_id).column_name) || '::text'
             || ' from ' || quote_ident((field_id).schema_name) || '.'
                         || quote_ident((field_id).relation_name)
