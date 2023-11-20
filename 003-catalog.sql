@@ -254,6 +254,8 @@ create view meta.foreign_key as
  * meta.function
  *****************************************************************************/
 
+-- this is built to take raw vars from informatino_schema and consolidate the
+-- logic that generates a function parameter expr in one place.
 create or replace function meta.stmt_function_parameter_def(
     parameter_name text, data_type text, udt_schema text, udt_name text, ordinal_position integer, parameter_default text
 ) returns text as $$
@@ -272,12 +274,12 @@ begin
     -- argmode IN/OUT/INOUT TODO
 
     -- argname
-    if parameter_name is not null then
+    if parameter_name is not null and parameter_name != '' then
         argname := quote_ident(parameter_name) || ' ';
     end if;
 
     -- argtype
-    if data_type = 'USER-DEFINED' or data_type = 'ARRAY' then
+    if data_type = 'USER-DEFINED' or data_type = 'ARRAY' or data_type is null or data_type = '' then
         argtype := quote_ident(udt_schema) || '.' || quote_ident(udt_name);
         if data_type = 'ARRAY' then
             argtype := argtype || '[]';
@@ -287,13 +289,13 @@ begin
     end if;
 
     -- default_expr
-    if default_expr is not null then
+    if default_expr is not null and default_expr != '' then
         default_expr := 'default ' || parameter_default;
     end if;
 
-    -- raise notice 'mode: %s, name: %s, type: %s, default: %s, stmt: %s', argmode, argname, argtype, default_expr, stmt;
+    -- raise notice 'mode: %, name: %, type: %, default: %', argmode, argname, argtype, default_expr;
 
-    return argmode || argname || argtype || default_expr;
+    return trim(argmode || argname || argtype || default_expr);
 end;
 $$ language plpgsql;
 
@@ -352,8 +354,7 @@ select
         array_agg(
             case
                 when p.data_type is null then null --= 'ARRAY' or p.data_type = 'USER-DEFINED' then null
-                -- else meta.stmt_function_parameter_def(p.data_type::text, p.parameter_name::text, p.udt_schema::text, p.udt_name::text, p.ordinal_position::integer, p.parameter_default::text)
-                else meta.stmt_function_parameter_def(p.data_type, p.parameter_name, p.udt_schema, p.udt_name, p.ordinal_position::integer, p.parameter_default)
+                else meta.stmt_function_parameter_def(p.parameter_name, p.data_type, p.udt_schema, p.udt_name, p.ordinal_position::integer, p.parameter_default)
             end
         ), null
     ) as parameters,
