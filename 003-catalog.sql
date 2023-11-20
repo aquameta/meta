@@ -254,16 +254,52 @@ create view meta.foreign_key as
  * meta.function
  *****************************************************************************/
 
-create type meta.function_param as (
-    name text,
-    type_schema_name text,
-    type_name text,
-    -- mode text, -- IN, OUT, INOUT -- use enum?
-    position integer,
-    "default" text
-);
+create or replace function meta.stmt_function_parameter_def(
+    parameter_name text, data_type text, udt_schema text, udt_name text, ordinal_position integer, parameter_default text
+) returns text as $$
+declare
+    argmode text := '';
+    argname text := '';
+    argtype text := '';
+    default_expr text := '';
 
-create view meta.function2 as
+begin
+    -- parameter_name: the name, or null if it has none
+    -- data_type: Data type of the parameter, if it is a built-in type, or ARRAY if it is some array (in that case, see the view element_types), else USER-DEFINED (in that case, the type is identified in udt_name and associated columns).
+    -- udt_schema: the schema that the type is in
+    -- udt_name: Name of the data type of the parameter
+
+    -- argmode IN/OUT/INOUT TODO
+
+    -- argname
+    if parameter_name is not null then
+        argname := quote_ident(parameter_name) || ' ';
+    end if;
+
+    -- argtype
+    if data_type = 'USER-DEFINED' or data_type = 'ARRAY' then
+        argtype := quote_ident(udt_schema) || '.' || quote_ident(udt_name);
+        if data_type = 'ARRAY' then
+            argtype := argtype || '[]';
+        end if;
+        argtype := argtype || ' ';
+    else argtype := data_type || ' ';
+    end if;
+
+    -- default_expr
+    if default_expr is not null then
+        default_expr := 'default ' || parameter_default;
+    end if;
+
+    -- raise notice 'mode: %s, name: %s, type: %s, default: %s, stmt: %s', argmode, argname, argtype, default_expr, stmt;
+
+    return argmode || argname || argtype || default_expr;
+end;
+$$ language plpgsql;
+
+
+
+create view meta.function as
 with f as (
     select
         -- function
@@ -304,17 +340,20 @@ select
             ),
             array[]::text[]
         )
-	) as id,
+    ) as id,
     meta.schema_id(f.routine_schema) as schema_id,
     f.routine_schema as schema_name,
     f.routine_name as name,
 
-	-- parameters - text array
+    -- parameters - text array
+    -- remove null, when there's no params
     array_remove(
+        -- agg parameters (if any)
         array_agg(
             case
                 when p.data_type is null then null --= 'ARRAY' or p.data_type = 'USER-DEFINED' then null
-                else row(p.parameter_name, p.udt_schema, p.udt_name, p.ordinal_position, p.parameter_default)::meta.function_param
+                -- else meta.stmt_function_parameter_def(p.data_type::text, p.parameter_name::text, p.udt_schema::text, p.udt_name::text, p.ordinal_position::integer, p.parameter_default::text)
+                else meta.stmt_function_parameter_def(p.data_type, p.parameter_name, p.udt_schema, p.udt_name, p.ordinal_position::integer, p.parameter_default)
             end
         ), null
     ) as parameters,
@@ -326,16 +365,14 @@ select
     coalesce(f.type_udt_schema || '.' || f.type_udt_name) as return_type,
     meta.type_id(f.type_udt_schema, f.type_udt_name) as return_type_id,
 
-
     -- language
     f.language,
 
-
     -- returns_set
     substring(pg_get_function_result(
-		-- function name
-		(quote_ident(f.routine_schema) || '.' || quote_ident(f.routine_name) || '(' ||
-		-- funtion type sig
+        -- function name
+        (quote_ident(f.routine_schema) || '.' || quote_ident(f.routine_name) || '(' ||
+        -- funtion type sig
         array_to_string(
             coalesce(
                  nullif(
@@ -375,7 +412,7 @@ group by
 
 
 -- old version, to be replaced
-create view meta.function as
+create view meta.function_old as
     select id,
            schema_id,
            schema_name,
@@ -969,7 +1006,7 @@ create or replace function meta.field_id_literal_value(field_id meta.field_id) r
 declare
     literal_value text;
 begin
-	-- ew
+    -- ew
     execute 'select ' || quote_ident((field_id).column_name) || '::text'
             || ' from ' || quote_ident((field_id).schema_name) || '.'
                         || quote_ident((field_id).relation_name)
