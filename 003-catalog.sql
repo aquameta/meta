@@ -31,27 +31,84 @@ as assignment;
  *****************************************************************************/
 create view meta.schema as
     select meta.schema_id(schema_name) id, schema_name::text as name
-    from information_schema.schemata;
+    from information_schema.schemata
+--    where schema_name not in ('pg_catalog', 'information_schema')
+;
 
 
 /******************************************************************************
  * meta.type
  *****************************************************************************/
-create view meta.type as
+-- https://github.com/aquameta/pg_catalog_get_defs/blob/master/pg_get_typedef.sql
+create or replace function get_typedef_composite(oid) returns text
+  language plpgsql
+  as $$
+  declare
+    defn text;
+  begin
+    select into defn
+           format('CREATE TYPE %s AS (%s)',
+                  $1::regtype,
+                  string_agg(coldef, ', ' order by attnum))
+      from (select a.attnum,
+                   format('%I %s%s',
+                          a.attname,
+                          format_type(a.atttypid, a.atttypmod),
+                          case when a.attcollation <> ct.typcollation
+                               then format(' COLLATE %I ', co.collname)
+                               else ''
+                          end) as coldef
+              from pg_type t
+              join pg_attribute a on a.attrelid=t.typrelid
+              join pg_type ct on ct.oid=a.atttypid
+              left join pg_collation co on co.oid=a.attcollation
+             where t.oid = $1
+               and a.attnum > 0
+               and not a.attisdropped) s;
+    return defn;
+  end;
+  $$;
+
+create or replace function get_typedef_enum(oid) returns text
+  language plpgsql
+  as $$
+  declare
+    defn text;
+  begin
+    select into defn
+           format('CREATE TYPE %s AS ENUM (%s)',
+                  $1::regtype,
+                  string_agg(quote_literal(enumlabel), ', '
+                             order by enumsortorder))
+      from pg_enum
+     where enumtypid = $1;
+    return defn;
+  end;
+  $$;
+
+
+create or replace view meta.type as
 select
     meta.type_id(n.nspname, pg_catalog.format_type(t.oid, NULL)) as id,
     t.typtype as "type",
-    n.nspname::text as "schema_name",
-    pg_catalog.format_type(t.oid, NULL)::text as "name",
-    case when c.relkind = 'c' then true else false end as "composite",
-    pg_catalog.obj_description(t.oid, 'pg_type') as "description"
+    n.nspname::text as schema_name,
+    t.typname as name,
+    case when c.relkind = 'c' then true else false end as composite,
+	case when t.typtype = 'c' then meta.get_typedef_composite(t.oid)
+		 when t.typtype = 'e' then meta.get_typedef_enum(t.oid)
+		 else 'UNSUPPORTED'
+	end as definition,
+    pg_catalog.obj_description(t.oid, 'pg_type') as description
 from pg_catalog.pg_type t
      left join pg_catalog.pg_namespace n on n.oid = t.typnamespace
      left join pg_catalog.pg_class c on c.oid = t.typrelid
 where (t.typrelid = 0 or c.relkind = 'c')
   and not exists(select 1 from pg_catalog.pg_type el where el.oid = t.typelem and el.typarray = t.oid)
-  and pg_catalog.pg_type_is_visible(t.oid)
-order by 1, 2;
+--   and pg_catalog.pg_type_is_visible(t.oid)
+	AND n.nspname <> 'pg_catalog'
+	AND n.nspname <> 'information_schema'
+;
+
 
 
 /******************************************************************************
@@ -77,10 +134,12 @@ SELECT meta.cast_id(ts.typname, pg_catalog.format_type(castsource, NULL),tt.typn
      ON c.casttarget = tt.oid
      LEFT JOIN pg_catalog.pg_namespace nt
      ON nt.oid = tt.typnamespace
+/*
 WHERE ( (true  AND pg_catalog.pg_type_is_visible(ts.oid)
     ) OR (true  AND pg_catalog.pg_type_is_visible(tt.oid)
 ) )
-ORDER BY 1, 2;
+ORDER BY 1, 2
+*/;
 
 /******************************************************************************
  * meta.operator
@@ -102,8 +161,9 @@ FROM pg_catalog.pg_operator o
     JOIN pg_catalog.pg_namespace trns on tr.typnamespace = trns.oid
 WHERE n.nspname <> 'pg_catalog'
     AND n.nspname <> 'information_schema'
-    AND pg_catalog.pg_operator_is_visible(o.oid)
-ORDER BY 1, 2, 3, 4;
+--    AND pg_catalog.pg_operator_is_visible(o.oid)
+-- ORDER BY 1, 2, 3, 4;
+;
 
 
 /******************************************************************************
@@ -254,10 +314,9 @@ create view meta.foreign_key as
  * meta.function
  *****************************************************************************/
 
--- this is built to take raw vars from informatino_schema and consolidate the
--- logic that generates a function parameter expr in one place.
+-- generates function parameter expressions from vars in information_schema
 create or replace function meta.stmt_function_parameter_def(
-    parameter_name text, data_type text, udt_schema text, udt_name text, ordinal_position integer, parameter_default text
+    parameter_mode text, parameter_name text, data_type text, udt_schema text, udt_name text, ordinal_position integer, parameter_default text
 ) returns text as $$
 declare
     argmode text := '';
@@ -271,7 +330,10 @@ begin
     -- udt_schema: the schema that the type is in
     -- udt_name: Name of the data type of the parameter
 
-    -- argmode IN/OUT/INOUT TODO
+    -- argmode IN/OUT/INOUT WIP
+	if parameter_mode is not null and parameter_mode != '' and parameter_mode != 'IN' then
+		argmode := parameter_mode || ' ';
+	end if;
 
     -- argname
     if parameter_name is not null and parameter_name != '' then
@@ -279,13 +341,21 @@ begin
     end if;
 
     -- argtype
-    if data_type = 'USER-DEFINED' or data_type = 'ARRAY' or data_type is null or data_type = '' then
-        argtype := quote_ident(udt_schema) || '.' || quote_ident(udt_name);
-        if data_type = 'ARRAY' then
-            argtype := argtype || '[]';
+    if data_type = 'ARRAY' then
+        -- raise notice 'argtype -> ARRAY';
+        if udt_schema != 'pg_catalog' then
+            argtype := quote_ident(udt_schema) || '.';
         end if;
-        argtype := argtype || ' ';
-    else argtype := data_type || ' ';
+        argtype := argtype || substring(udt_name from 2) || '[]'; -- hack: trim off the _ from the beginning of udt_name for arrays....
+    else
+        if data_type = 'USER-DEFINED' or data_type is null or data_type = '' then -- why the last two
+            -- raise notice 'argtype -> USER-DEFINED';
+            argtype := quote_ident(udt_schema) || '.' || quote_ident(udt_name);
+            argtype := argtype || ' ';
+        else
+            -- raise notice 'argtype -> else (not UD or ARR)';
+            argtype := data_type || ' ';
+        end if;
     end if;
 
     -- default_expr
@@ -353,8 +423,8 @@ select
         -- agg parameters (if any)
         array_agg(
             case
-                when p.data_type is null then null --= 'ARRAY' or p.data_type = 'USER-DEFINED' then null
-                else meta.stmt_function_parameter_def(p.parameter_name, p.data_type, p.udt_schema, p.udt_name, p.ordinal_position::integer, p.parameter_default)
+                when p.data_type is null then null -- function has no parameters, but left join makes one row
+                else meta.stmt_function_parameter_def(p.parameter_mode, p.parameter_name, p.data_type, p.udt_schema, p.udt_name, p.ordinal_position::integer, p.parameter_default)
             end
         ), null
     ) as parameters,
@@ -399,7 +469,7 @@ where
         -- allow null for position for functions have no parameters (like trigger functions)
         (p.ordinal_position > 0 or p.ordinal_position is null)
         -- only IN and INOUT parameters
-        and (p.parameter_mode like 'IN%' or p.parameter_mode is null)
+        and (p.parameter_mode like 'IN%' or p.parameter_mode is null) -- FIXME!!!!
 
 group by
     f.routine_schema,
