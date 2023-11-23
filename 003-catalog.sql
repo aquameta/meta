@@ -396,7 +396,7 @@ with f as (
 
     where r.routine_type = 'FUNCTION'
         and r.routine_name not in ('pg_identify_object', 'pg_sequence_parameters')
-        -- and r.routine_schema not in ('pg_catalog', 'information_schema', 'public')
+        and r.routine_schema not in ('pg_catalog', 'information_schema')
 )
 
 select
@@ -1073,19 +1073,37 @@ create or replace function meta.row_exists(in row_id meta.row_id, out answer boo
     end;
 $$ language plpgsql;
 
-create or replace function meta.field_id_literal_value(field_id meta.field_id) returns text as $$
+
+
+create or replace function meta.field_id_literal_value(field_id meta.field_id, use_meta_materialized boolean default false) returns text as $$
 declare
     literal_value text;
+    relation_name text;
+    stmt text;
 begin
-    -- ew
-    execute 'select ' || quote_ident((field_id).column_name) || '::text'
-            || ' from ' || quote_ident((field_id).schema_name) || '.'
-                        || quote_ident((field_id).relation_name)
-            || ' where ' || quote_ident((field_id).pk_column_name)
-                         || '::text =' || quote_literal((field_id).pk_value)
-    into literal_value;
+    relation_name := (field_id).relation_name;
+    if (field_id).schema_name = 'meta' and use_meta_materialized = 't' then
+        relation_name := 'mat_' || relation_name;
+        -- raise notice '-------- using meta_mat for field_id %', field_id;
+    end if;
+
+    stmt := format('select %I::text from %I.%I where %I::text = %L',
+        (field_id).column_name,
+        (field_id).schema_name,
+        relation_name,
+        (field_id).pk_column_name,
+        (field_id).pk_value);
+
+    execute stmt into literal_value;
+
+    if use_meta_materialized = 't' then
+        -- raise notice 'stmt: %', stmt;
+    end if;
 
     return literal_value;
-exception when others then return null;
+-- TODO: is this correct?
+exception when others then
+    raise warning 'field_id_literal_value exception on %: %', field_id, SQLERRM;
+    return null;
 end
-$$ language plpgsql;
+$$ language plpgsql stable;
