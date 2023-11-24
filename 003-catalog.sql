@@ -309,75 +309,222 @@ create view meta.foreign_key as
 
     group by tc.table_schema, tc.table_name, tc.constraint_name, update_rule, delete_rule;
 
-create or replace function meta._get_function_type_sig_array(identity_args text) returns text[] as $$
-begin
-    -- SELECT unnest(regexp_split_to_array('value1, "value 2", \'value,3\'', E'(?<!\\\\)\\s*,\\s*')) AS individual_values;
-    return array[identity_args];
-end
-$$ language plpgsql;
-
-create or replace function meta._get_function_parameters(parameters text) returns text[] as $$
-begin;
-    return parameters::text[];
-end
-$$ language plpgsql;
-
-create or replace view meta.function_pg as
-with orig as (
-SELECT n.nspname as "schema_name",
-  p.proname as "name",
-  pg_get_function_result(p.oid) as "return_type",
-  meta._get_function_type_sig_array (pg_get_function_identity_arguments(p.oid)) as "type_sig",
-  pg_catalog.pg_get_function_arguments(p.oid) as "parameters",
- CASE p.prokind
-  WHEN 'a' THEN 'agg'
-  WHEN 'w' THEN 'window'
-  WHEN 'p' THEN 'proc'
-  ELSE 'func'
- END as "type",
- CASE
-  WHEN p.provolatile = 'i' THEN 'immutable'
-  WHEN p.provolatile = 's' THEN 'stable'
-  WHEN p.provolatile = 'v' THEN 'volatile'
- END as "volatility",
- CASE
-  WHEN p.proparallel = 'r' THEN 'restricted'
-  WHEN p.proparallel = 's' THEN 'safe'
-  WHEN p.proparallel = 'u' THEN 'unsafe'
- END as "parallel",
- pg_catalog.pg_get_userbyid(p.proowner) as "owner",
- CASE WHEN prosecdef THEN 'definer' ELSE 'invoker' END AS "security",
- pg_catalog.array_to_string(p.proacl, E'\n') AS "access privileges",
- l.lanname as "language",
- COALESCE(pg_catalog.pg_get_function_sqlbody(p.oid), p.prosrc) as "definition",
- pg_catalog.obj_description(p.oid, 'pg_proc') as "description"
-FROM pg_catalog.pg_proc p
-     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
-     LEFT JOIN pg_catalog.pg_language l ON l.oid = p.prolang
-WHERE /* pg_catalog.pg_function_is_visible(p.oid)
-      AND */ n.nspname <> 'pg_catalog'
-      AND n.nspname <> 'information_schema'
--- ORDER BY 1, 2, 4;
-)
-
-select 
-    meta.function_id(schema_name, name, type_sig) as id,
-    schema_name,
-    name,
-    type_sig,
-    parameters,     -- text[]
-    definition,     -- text
-    return_type,    -- text
-    -- return_type_id, -- type_id
-    language,       -- text
-    false as returns_set     -- boolean
-
-from orig;
 
 
 /******************************************************************************
  * meta.function
  *****************************************************************************/
+CREATE OR REPLACE FUNCTION meta._split_string_with_quotes(input_str TEXT)
+RETURNS TEXT[]
+AS $$
+DECLARE
+  result_array TEXT[];
+BEGIN
+  SELECT string_to_array(
+           regexp_replace(
+             input_str,
+             '\s*("([^"]*)"|\S+)\s*',
+             '\2',
+             'g'
+           ),
+           ','
+         )
+  INTO result_array;
+
+  RETURN result_array;
+END;
+$$ LANGUAGE plpgsql;
+
+
+create or replace function meta._get_function_type_sig_array(identity_args text) returns text[] as $$
+    declare
+        param_exprs text[] := '{}';
+        param_expr text[] := '{}';
+        sig_array text[] := '{}';
+        len integer;
+        sig_len integer;
+    begin
+        -- raise notice 'type_sig_array got: %', identity_args;
+        param_exprs := regexp_split_to_array(identity_args, E'(?<!\\\\)\\s*,\\s*');
+
+        len := array_length(param_exprs,1);
+        if len is null or len = 0 or param_exprs[1] = '' then -- raise notice '   NO PARAMS'; return '{}'::text[]; end if;
+
+        -- raise notice 'type_sig_array after splitting into individual exprs: %', param_exprs;
+        for i in 1..len
+        loop
+            -- split by spaces (but not spaces within quotes)
+            param_expr = regexp_split_to_array(param_exprs[i], E'(?<!\\\\)\\s+');
+            -- param_expr = meta._split_string_with_quotes(param_exprs[i]); -- regexp_split_to_array(param_exprs[i], E'(?<!\\\\)\\s+');
+            -- raise notice '    type_sig_array expr: %, length is %', param_expr, array_length(param_expr,1);
+
+            sig_len := array_length(param_expr,1);
+
+            -- OUT x int
+            if sig_len = 3 then
+                if param_expr[1] = 'OUT' or param_expr[1] = 'IN' or param_expr[1] = 'INOUT' then
+                    if param_expr[1] = 'IN' or param_expr[1] = 'INOUT' then
+                        sig_array := array_append(sig_array, param_expr[2]);
+                    -- it's OUT, so skip it
+                    else
+                        -- do nothing
+                    end if;
+                else
+                    -- three params, first is not IN or OUT or INOUT
+                    raise exception 'Unrecognized parameter expression (three tokens w/ no IN/OUT/INOUT): %', parm_expr;
+                end if;
+            -- "IN int" or "x int" or "OUT int", but type is always second token
+            else
+                if sig_len = 2 then
+                    if param_expr[1] != 'OUT' then
+                        sig_array := array_append(sig_array, param_expr[2]);
+                    end if;
+                -- "int"
+                else
+                    if sig_len = 1 then
+                        sig_array := array_append(sig_array, param_expr[1]);
+                    else
+                        raise exception 'Uncrecognized parameter expression (too many tokens): %', param_expr;
+                    end if;
+                end if;
+            end if;
+        end loop;
+        return sig_array;
+    end
+$$ language plpgsql stable;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+create or replace function meta._get_function_parameters(parameters text) returns text[] as $$
+    declare
+        param_exprs text[] := '{}';
+        param_expr text[] := '{}';
+        result text[] := '{}';
+        default_pos integer;
+        params_len integer;
+        param_len integer;
+    begin
+        -- raise notice 'get_function_parameters got: %', parameters;
+        param_exprs := regexp_split_to_array(parameters, E'(?<!\\\\)\\s*,\\s*');
+
+        params_len := array_length(param_exprs,1);
+        if params_len is null or params_len = 0 or param_exprs[1] = '' then -- raise notice '   NO PARAMS'; return '{}'::text[]; end if;
+
+        -- raise notice 'get_function_parameters after splitting into individual exprs: %', param_exprs;
+        -- for each parameter, drop OUTs, slice off INOUTs and trim everything past 'DEFAULT'
+        for i in 1..params_len loop
+            -- split by spaces (but not spaces within quotes) FIXME: breaks on spaces
+            param_expr = regexp_split_to_array(param_exprs[i], E'(?<!\\\\)\\s+');
+            -- param_expr = meta._split_string_with_quotes(param_exprs[i]); -- regexp_split_to_array(param_exprs[i], E'(?<!\\\\)\\s+');
+            param_len := array_length(param_expr,1);
+            -- raise notice '    get_function_parameters expr: %, length is %', param_expr, array_length(param_expr,1);
+
+			-- skip OUTs
+			if param_expr[1] != 'OUT' then
+                if param_expr[1] = 'INOUT' then
+                    param_exprs[i] := array_slice(param_expr, 2, param_len);
+                end if;
+
+                result := array_append(result, param_exprs[i]);
+            end if;
+        end loop;
+        return result;
+    end
+$$ language plpgsql stable;
+
+create or replace view meta.function_pg as
+    with orig as (
+        -- slightly modified version of query output by \df+
+        SELECT n.nspname as "schema_name",
+          p.proname as "name",
+          pg_get_function_result(p.oid) as "return_type",
+          pg_get_function_identity_arguments(p.oid) as "type_sig",
+          pg_catalog.pg_get_function_arguments(p.oid) as "parameters",
+         CASE p.prokind
+          WHEN 'a' THEN 'agg'
+          WHEN 'w' THEN 'window'
+          WHEN 'p' THEN 'proc'
+          ELSE 'func'
+         END as "type",
+         CASE
+          WHEN p.provolatile = 'i' THEN 'immutable'
+          WHEN p.provolatile = 's' THEN 'stable'
+          WHEN p.provolatile = 'v' THEN 'volatile'
+         END as "volatility",
+         CASE
+          WHEN p.proparallel = 'r' THEN 'restricted'
+          WHEN p.proparallel = 's' THEN 'safe'
+          WHEN p.proparallel = 'u' THEN 'unsafe'
+         END as "parallel",
+         pg_catalog.pg_get_userbyid(p.proowner) as "owner",
+         CASE WHEN prosecdef THEN 'definer' ELSE 'invoker' END AS "security",
+         pg_catalog.array_to_string(p.proacl, E'\n') AS "access_privileges",
+         l.lanname as "language",
+         COALESCE(pg_catalog.pg_get_function_sqlbody(p.oid), p.prosrc) as "definition",
+         pg_catalog.obj_description(p.oid, 'pg_proc') as "description"
+        FROM pg_catalog.pg_proc p
+             LEFT JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+             LEFT JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+        WHERE /* pg_catalog.pg_function_is_visible(p.oid)
+              AND */ n.nspname <> 'pg_catalog'
+              AND n.nspname <> 'information_schema'
+        -- ORDER BY 1, 2, 4;
+    )
+
+    select 
+        meta.function_id(
+            schema_name,
+            name,
+            meta._get_function_type_sig_array(type_sig)
+        ) as id,                -- meta.function_id
+        schema_name,
+        name,
+        meta._get_function_type_sig_array (type_sig) as type_sig,
+        meta._get_function_parameters(parameters) as parameters,
+        definition,
+        "type",                 -- immutable | stable | volatile
+        return_type,
+         -- return_type_id,      -- type_id
+        language,
+        false as returns_set,   -- boolean
+        "parallel",             -- restricted | safe | unsafe
+        volatility,
+         -- access_privileges,
+        security                -- definer | invoker
+
+    from orig;
+
 
 -- generates function parameter expressions from vars in information_schema
 create or replace function meta.stmt_function_parameter_def(
