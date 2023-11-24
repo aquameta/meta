@@ -309,6 +309,71 @@ create view meta.foreign_key as
 
     group by tc.table_schema, tc.table_name, tc.constraint_name, update_rule, delete_rule;
 
+create or replace function meta._get_function_type_sig_array(identity_args text) returns text[] as $$
+begin
+    -- SELECT unnest(regexp_split_to_array('value1, "value 2", \'value,3\'', E'(?<!\\\\)\\s*,\\s*')) AS individual_values;
+    return array[identity_args];
+end
+$$ language plpgsql;
+
+create or replace function meta._get_function_parameters(parameters text) returns text[] as $$
+begin;
+    return parameters::text[];
+end
+$$ language plpgsql;
+
+create or replace view meta.function_pg as
+with orig as (
+SELECT n.nspname as "schema_name",
+  p.proname as "name",
+  pg_get_function_result(p.oid) as "return_type",
+  meta._get_function_type_sig_array (pg_get_function_identity_arguments(p.oid)) as "type_sig",
+  pg_catalog.pg_get_function_arguments(p.oid) as "parameters",
+ CASE p.prokind
+  WHEN 'a' THEN 'agg'
+  WHEN 'w' THEN 'window'
+  WHEN 'p' THEN 'proc'
+  ELSE 'func'
+ END as "type",
+ CASE
+  WHEN p.provolatile = 'i' THEN 'immutable'
+  WHEN p.provolatile = 's' THEN 'stable'
+  WHEN p.provolatile = 'v' THEN 'volatile'
+ END as "volatility",
+ CASE
+  WHEN p.proparallel = 'r' THEN 'restricted'
+  WHEN p.proparallel = 's' THEN 'safe'
+  WHEN p.proparallel = 'u' THEN 'unsafe'
+ END as "parallel",
+ pg_catalog.pg_get_userbyid(p.proowner) as "owner",
+ CASE WHEN prosecdef THEN 'definer' ELSE 'invoker' END AS "security",
+ pg_catalog.array_to_string(p.proacl, E'\n') AS "access privileges",
+ l.lanname as "language",
+ COALESCE(pg_catalog.pg_get_function_sqlbody(p.oid), p.prosrc) as "definition",
+ pg_catalog.obj_description(p.oid, 'pg_proc') as "description"
+FROM pg_catalog.pg_proc p
+     LEFT JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+     LEFT JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+WHERE /* pg_catalog.pg_function_is_visible(p.oid)
+      AND */ n.nspname <> 'pg_catalog'
+      AND n.nspname <> 'information_schema'
+-- ORDER BY 1, 2, 4;
+)
+
+select 
+    meta.function_id(schema_name, name, type_sig) as id,
+    schema_name,
+    name,
+    type_sig,
+    parameters,     -- text[]
+    definition,     -- text
+    return_type,    -- text
+    -- return_type_id, -- type_id
+    language,       -- text
+    false as returns_set     -- boolean
+
+from orig;
+
 
 /******************************************************************************
  * meta.function
@@ -382,7 +447,7 @@ with f as (
         r.specific_name::text,
 
         -- return type
-        -- r.data_type, -- useless?
+        r.data_type, -- useless?
         r.type_udt_schema::text,
         r.type_udt_name::text,
 
@@ -390,7 +455,10 @@ with f as (
         r.routine_definition::text,
 
         -- language
-        lower(r.external_language)::information_schema.character_data::text as language
+        lower(r.external_language)::information_schema.character_data::text as language,
+
+        -- routine_type: VOLATILE, IMMUTABLE or STABLE
+        r.routine_type
 
     from information_schema.routines r
 
@@ -458,7 +526,8 @@ select
         )
     || ')')::regprocedure) from 1 for 6) = 'SETOF '
         or (select proretset = 't' from pg_proc join pg_namespace on pg_proc.pronamespace = pg_namespace.oid where proname = f.routine_name and nspname = f.routine_schema limit 1)
-    as returns_set
+    as returns_set,
+    f.routine_type as volatility_type -- volatile, immutable, stable
 
 from f
     -- left join on params because sometimes functions don't have params
@@ -478,8 +547,22 @@ group by
     f.type_udt_schema,
     f.type_udt_name,
     f.routine_definition,
-    f.language
+    f.language,
+    f.routine_type
 ;
+
+
+/*
+-- caused by dep fail
+NOTICE:  CHECKOUT EXCEPTION checking out (meta,function,id,"(endpoint,path_to_relation_id,{text})"): function endpoint.urldecode_arr(text) does not exist
+NOTICE:  CHECKOUT EXCEPTION checking out (meta,function,id,"(endpoint,columns_json,""{text,text,pg_catalog._text,pg_catalog._text}"")"): "json" is not a known variable
+NOTICE:  CHECKOUT EXCEPTION checking out (meta,function,id,"(endpoint,anonymous_rows_select_function,""{text,text,json}"")"): variable "mimetype" does not exist
+NOTICE:  CHECKOUT EXCEPTION checking out (meta,function,id,"(endpoint,column_list,""{text,text,text,pg_catalog._text,pg_catalog._text}"")"): "column_list" is not a know
+n variable
+NOTICE:  CHECKOUT EXCEPTION checking out (meta,function,id,"(endpoint,rows_select_function,""{meta.function_id,json}"")"): "mimetype" is not a known variable
+NOTICE:  CHECKOUT EXCEPTION checking out (meta,function,id,"(endpoint,field_select,{meta.field_id})"): "mimetype" is not a known variable
+
+*/
 
 
 -- old version, to be replaced
