@@ -224,7 +224,7 @@ Function output (for relation entity):
 ```
 create or replace function meta.meta_id(relation_id meta.relation_id) returns meta.meta_id as $_$
     select meta.meta_id('relation/' || quote_ident(relation_id.schema_name) || '/' || quote_ident(relation_id.name));
-$_$ language sql;
+$_$ immutable language sql;
 ```
 **********************************************************************************/
 create or replace function stmt_create_meta_id_constructor (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
@@ -233,7 +233,7 @@ declare
     snippets public.hstore;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create function meta.meta_id(%I meta.%I) returns meta.meta_id as $_$ select meta.meta_id(%L); $_$ language sql;', name || '_id', name || '_id', name, snippets['meta_id_path']);
+    stmt := format('create function meta.meta_id(%I meta.%I) returns meta.meta_id as $_$ select meta.meta_id(%L); $_$ immutable language sql;', name || '_id', name || '_id', name, snippets['meta_id_path']);
     return stmt;
 end;
 $$ language plpgsql;
@@ -242,7 +242,7 @@ $$ language plpgsql;
 /**********************************************************************************
 create function meta.relation_id(schema_name text,name text) returns meta.relation_id as $_$
     select row(schema_name,name)::meta.relation_id
-$_$ language sql immutable;
+$_$ immutable language sql;
 **********************************************************************************/
 create or replace function stmt_create_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
@@ -251,7 +251,7 @@ declare
     i integer := 1;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create function meta.%I(%s) returns meta.%I as $_$ select row(%s)::meta.%I $_$ language sql immutable;',
+    stmt := format('create function meta.%I(%s) returns meta.%I as $_$ select row(%s)::meta.%I $_$ immutable language sql;',
        name || '_id',
        snippets['attributes'],
        name || '_id',
@@ -277,7 +277,7 @@ $$ language plpgsql;
 /**********************************************************************************
 create function meta.eq(leftarg meta.relation_id, rightarg jsonb) returns boolean as
     $_$select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'
-$_$ language sql;
+$_$ immutable language sql;
 **********************************************************************************/
 create or replace function stmt_create_type_to_jsonb_comparator_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
@@ -285,7 +285,7 @@ declare
     snippets public.hstore;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create function meta.eq(leftarg meta.%I, rightarg jsonb) returns boolean as $_$%s$_$ language sql;',
+    stmt := format('create function meta.eq(leftarg meta.%I, rightarg jsonb) returns boolean as $_$%s$_$ immutable language sql;',
         name || '_id',
         snippets['compare_to_jsonb']
     );
@@ -356,7 +356,7 @@ $$ language plpgsql;
 /**********************************************************************************
 create function meta.eq(leftarg meta.relation_id, rightarg json) returns boolean as
     $_$select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'
-$_$ language sql;
+$_$ immutable language sql;
 **********************************************************************************/
 create or replace function stmt_create_type_to_json_comparator_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
 declare
@@ -364,7 +364,7 @@ declare
     snippets public.hstore;
 begin
     snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create function meta.eq(leftarg meta.%I, rightarg json) returns boolean as $_$%s$_$ language sql;',
+    stmt := format('create function meta.eq(leftarg meta.%I, rightarg json) returns boolean as $_$%s$_$ immutable language sql;',
         name || '_id',
         snippets['compare_to_json']
     );
