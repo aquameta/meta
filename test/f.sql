@@ -1,5 +1,5 @@
 begin;
-drop schema foo cascade;
+drop schema if exists foo cascade;
 create schema foo;
 set search_path=foo;
 
@@ -29,5 +29,6 @@ create function tz2(t character varying,  timestamp with time zone) returns void
 create function tz(t character varying) returns void as $$select 1;$$ language sql;
 create function two_multiword_params(t character varying, "gross,""" character varying) returns void as $$select 1;$$ language sql;
 create function two_multiword_params("integer" character varying) returns void as $$select 1;$$ language sql;
+create function breaks_stuff("char", name, name, name[]) returns void as $$select 1;$$ language sql;
 
 commit;

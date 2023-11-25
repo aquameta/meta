@@ -94,10 +94,10 @@ select
     n.nspname::text as schema_name,
     t.typname as name,
     case when c.relkind = 'c' then true else false end as composite,
-	case when t.typtype = 'c' then meta.get_typedef_composite(t.oid)
-		 when t.typtype = 'e' then meta.get_typedef_enum(t.oid)
-		 else 'UNSUPPORTED'
-	end as definition,
+    case when t.typtype = 'c' then meta.get_typedef_composite(t.oid)
+         when t.typtype = 'e' then meta.get_typedef_enum(t.oid)
+         else 'UNSUPPORTED'
+    end as definition,
     pg_catalog.obj_description(t.oid, 'pg_type') as description
 from pg_catalog.pg_type t
      left join pg_catalog.pg_namespace n on n.oid = t.typnamespace
@@ -105,8 +105,8 @@ from pg_catalog.pg_type t
 where (t.typrelid = 0 or c.relkind = 'c')
   and not exists(select 1 from pg_catalog.pg_type el where el.oid = t.typelem and el.typarray = t.oid)
 --   and pg_catalog.pg_type_is_visible(t.oid)
-	AND n.nspname <> 'pg_catalog'
-	AND n.nspname <> 'information_schema'
+    AND n.nspname <> 'pg_catalog'
+    AND n.nspname <> 'information_schema'
 ;
 
 
@@ -327,43 +327,48 @@ begin
         char_at_index := substring(input_str from i for 1);
 
         -- raise notice 'current_element: __%__, char_at_index: __%__, inside_quotes: __%__', current_element, char_at_index, inside_quotes;
+        -- we got a quote
         if char_at_index = '"' then
-            -- raise notice '  got quote';
-            -- Handle double quotes inside quotes
-            if inside_quotes then
-                -- raise notice '    inside_quotes';
-                -- double quote
-                if substring(input_str from i + 1 for 1) = '"' then
-                    -- raise notice '      double quote';
-                    current_element := current_element || '""';
-                    i := i + 1; -- Skip the next double quote
-                -- single quote
-                else
-                    -- raise notice '      single quote';
-                    current_element := current_element || char_at_index;
-                    inside_quotes := not inside_quotes;
-                end if;
+            -- raise notice '    ! got quote';
+            -- is it a double double-quote?
+            if substring(input_str from i + 1 for 1) = '"' then
+                -- yes!
+                -- raise notice '        a double double quote!';
+                current_element := current_element || '""';
+                i := i + 1; -- skip the next quote
             else
+                -- no.  single quote means flip inside_quotes.
+                -- raise notice '        a mere single double-quote';
                 inside_quotes := not inside_quotes;
-                current_element := current_element || char_at_index;
+                current_element := current_element || '"';
             end if;
-        elseif char_at_index = split_char and not inside_quotes then
-            -- raise notice '  got comma outside quotes';
-            result_array := array_append(result_array, trim(current_element));
-            current_element := '';
-        elseif i = length(input_str) then
-            current_element := current_element || char_at_index;
-            result_array := array_append(result_array, trim(current_element));
+        -- non-quote char
         else
-            -- raise notice '  normal char, adding __%__', char_at_index;
-            current_element := current_element || char_at_index;
-            -- raise notice '  normal char, current_element is now__%__', current_element;
+            -- is it the infamous split_charn
+            if char_at_index = split_char and not inside_quotes then
+                -- raise notice '    ! got the split char __%__ outside quotes', split_char;
+                -- add current_element to the results_array
+                result_array := array_append(result_array, trim(current_element));
+                -- clear current_element
+                current_element := '';
+            -- no, just a normal char
+            else
+                -- raise notice '    . normal char, adding __%__', char_at_index;
+                current_element := current_element || char_at_index;
+                -- raise notice '    current_element is now__%__', current_element;
+            end if;
         end if;
+
+        -- if this is the last character, add current_element
+        if i = length(input_str) then
+            result_array := array_append(result_array, trim(current_element));
+        end if;
+
     end loop;
 
     return result_array;
 end;
-$$ language plpgsql;
+$$ language plpgsql stable;
 
 
 -- returns an array of types, given an identity_args string (as provided by pg_get_function_identity_arguments())
@@ -378,22 +383,36 @@ create or replace function meta._get_function_type_sig_array(identity_args text)
         good_type text;
         good boolean;
     begin
-        raise notice '# type_sig_array got: %', identity_args;
+        -- raise notice '# type_sig_array got: %', identity_args;
         param_exprs := meta.split_quoted_string(identity_args,',');
         len := array_length(param_exprs,1);
-        raise notice '# param_exprs: %, length: %', param_exprs, len;
+        -- raise notice '# param_exprs: %, length: %', param_exprs, len;
         if len is null or len = 0 or param_exprs[1] = '' then
-            raise notice '    NO PARAMS';
+            -- raise notice '    NO PARAMS';
             return '{}'::text[];
         end if;
-        raise notice 'type_sig_array after splitting into individual exprs (length %): %', len, param_exprs;
+        -- raise notice 'type_sig_array after splitting into individual exprs (length %): %', len, param_exprs;
+
+        -- for each parameter expression
         for i in 1..len
         loop
             good_type := null;
             -- split by spaces (but not spaces within quotes)
             param_expr = meta.split_quoted_string(param_exprs[i], ' ');
+            -- raise notice '        type_sig_array expr: %, length is %', param_expr, len2;
+
+            -- skip OUTs for type-sig, the function isn't called with those
+            continue when param_expr[1] = 'OUT';
+
             len2 := array_length(param_expr,1);
-            raise notice '    !!! type_sig_array expr: %, length is %', param_expr, len2;
+            if len2 is null then
+                raise warning 'len2 is null, i: %, identity_args: %, param_exprs: %, param_expr: %', i, identity_args, param_exprs, param_expr;
+            end if;
+
+            -- no params;
+            continue when len2 is null;
+
+            -- ERROR:  len2 is null, i: 1, identity_args: "char", name, name, name[]
             for j in 1..len2 loop
                 cast_try := array_to_string(param_expr[j:],' ');
                 -- raise notice '    !!! casting % to ::regtype', cast_try;
@@ -406,7 +425,7 @@ create or replace function meta._get_function_type_sig_array(identity_args text)
                 if good_type is not null then
                     -- raise notice '    GOT A TYPE!! %', good_type;
                     sig_array := array_append(sig_array, good_type);
-					exit;
+                    exit;
                 else
                     -- raise notice '    Fail.';
                 end if;
@@ -418,7 +437,7 @@ create or replace function meta._get_function_type_sig_array(identity_args text)
         end loop;
         return sig_array;
     end
-$$ language plpgsql;
+$$ language plpgsql stable;
 
 create or replace function meta._get_function_parameters(parameters text) returns text[] as $$
     declare
@@ -453,7 +472,7 @@ create or replace function meta._get_function_parameters(parameters text) return
 $$ language plpgsql stable;
 
 
-create or replace view meta.function_pg as
+create or replace view meta.function as
     with orig as (
         -- slightly modified version of query output by \df+
         SELECT n.nspname as "schema_name",
@@ -498,6 +517,7 @@ create or replace view meta.function_pg as
             name,
             meta._get_function_type_sig_array(type_sig)
         ) as id,                -- meta.function_id
+        meta.schema_id(schema_name) as schema_id,
         schema_name,
         name,
         meta._get_function_type_sig_array (type_sig) as type_sig,
@@ -508,7 +528,7 @@ create or replace view meta.function_pg as
         return_type,
          -- return_type_id,      -- type_id
         language,
-        -- false as returns_set,   -- boolean
+        case when return_type like 'SETOF %' then true else false end as returns_set,   -- boolean
         "parallel",             -- restricted | safe | unsafe
         volatility,
         access_privileges,
@@ -533,9 +553,9 @@ begin
     -- udt_name: Name of the data type of the parameter
 
     -- argmode IN/OUT/INOUT WIP
-	if parameter_mode is not null and parameter_mode != '' and parameter_mode != 'IN' then
-		argmode := parameter_mode || ' ';
-	end if;
+    if parameter_mode is not null and parameter_mode != '' and parameter_mode != 'IN' then
+        argmode := parameter_mode || ' ';
+    end if;
 
     -- argname
     if parameter_name is not null and parameter_name != '' then
@@ -573,7 +593,7 @@ $$ language plpgsql;
 
 
 
-create view meta.function as
+create view meta.function_info_schema as
 with f as (
     select
         -- function
