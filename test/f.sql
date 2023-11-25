@@ -19,10 +19,15 @@ create function no_params() returns integer as $$select 1; $$language sql;
 create function no_return() returns void as $$select 1; $$language sql;
 create function "has""quote"() returns void as $$select 1; $$language sql;
 create function "has,comma"() returns void as $$select 1; $$language sql;
+create function param_has_comma("has,comma" character varying) returns void as $$select 1;$$ language sql;
 create function param_with_quote("quote""param" text) returns void as $$select 1;$$language sql;
--- create function "has space"() returns void as $$select 1;$$ language sql;
--- create function horrible_param("x int DEFAULT 1" integer default 2) returns void as $$select 1;$$ language sql;
+create function "has space"() returns void as $$select 1;$$ language sql;
+create function horrible_param("x int DEFAULT 1" integer default 2) returns void as $$select 1;$$ language sql;
 create function just_one_out(OUT integer) returns integer as $$select 1;$$ language sql;
 create function just_one_out_no_return(OUT integer) as $$select 1;$$ language sql;
+create function tz2(t character varying,  timestamp with time zone) returns void as $$select 1;$$ language sql;
+create function tz(t character varying) returns void as $$select 1;$$ language sql;
+create function two_multiword_params(t character varying, "gross,""" character varying) returns void as $$select 1;$$ language sql;
+create function two_multiword_params("integer" character varying) returns void as $$select 1;$$ language sql;
 
 commit;

@@ -314,82 +314,106 @@ create view meta.foreign_key as
 /******************************************************************************
  * meta.function
  *****************************************************************************/
-CREATE OR REPLACE FUNCTION meta._split_string_with_quotes(input_str TEXT)
-RETURNS TEXT[]
-AS $$
-DECLARE
-  result_array TEXT[];
-BEGIN
-  SELECT string_to_array(
-           regexp_replace(
-             input_str,
-             '\s*("([^"]*)"|\S+)\s*',
-             '\2',
-             'g'
-           ),
-           ','
-         )
-  INTO result_array;
 
-  RETURN result_array;
-END;
-$$ LANGUAGE plpgsql;
+-- splits a string of identifiers, some of which are quoted, based on the provided delimeter, but not if it is in quotes.
+create or replace function meta.split_quoted_string(input_str text, split_char text) returns text[] as $$
+declare
+    result_array text[];
+    inside_quotes boolean := false;
+    current_element text := '';
+    char_at_index text;
+begin
+    for i in 1 .. length(input_str) loop
+        char_at_index := substring(input_str from i for 1);
+
+        -- raise notice 'current_element: __%__, char_at_index: __%__, inside_quotes: __%__', current_element, char_at_index, inside_quotes;
+        if char_at_index = '"' then
+            -- raise notice '  got quote';
+            -- Handle double quotes inside quotes
+            if inside_quotes then
+                -- raise notice '    inside_quotes';
+                -- double quote
+                if substring(input_str from i + 1 for 1) = '"' then
+                    -- raise notice '      double quote';
+                    current_element := current_element || '""';
+                    i := i + 1; -- Skip the next double quote
+                -- single quote
+                else
+                    -- raise notice '      single quote';
+                    current_element := current_element || char_at_index;
+                    inside_quotes := not inside_quotes;
+                end if;
+            else
+                inside_quotes := not inside_quotes;
+                current_element := current_element || char_at_index;
+            end if;
+        elseif char_at_index = split_char and not inside_quotes then
+            -- raise notice '  got comma outside quotes';
+            result_array := array_append(result_array, trim(current_element));
+            current_element := '';
+        elseif i = length(input_str) then
+            current_element := current_element || char_at_index;
+            result_array := array_append(result_array, trim(current_element));
+        else
+            -- raise notice '  normal char, adding __%__', char_at_index;
+            current_element := current_element || char_at_index;
+            -- raise notice '  normal char, current_element is now__%__', current_element;
+        end if;
+    end loop;
+
+    return result_array;
+end;
+$$ language plpgsql;
 
 
+-- returns an array of types, given an identity_args string (as provided by pg_get_function_identity_arguments())
 create or replace function meta._get_function_type_sig_array(identity_args text) returns text[] as $$
     declare
         param_exprs text[] := '{}';
         param_expr text[] := '{}';
         sig_array text[] := '{}';
         len integer;
-        sig_len integer;
+        len2 integer;
+        cast_try text;
+        good_type text;
+        good boolean;
     begin
-        -- raise notice 'type_sig_array got: %', identity_args;
-        param_exprs := regexp_split_to_array(identity_args, E'(?<!\\\\)\\s*,\\s*');
-
+        raise notice '# type_sig_array got: %', identity_args;
+        param_exprs := meta.split_quoted_string(identity_args,',');
         len := array_length(param_exprs,1);
+        raise notice '# param_exprs: %, length: %', param_exprs, len;
         if len is null or len = 0 or param_exprs[1] = '' then
-            -- raise notice '   NO PARAMS'; 
-            return '{}'::text[]; 
+            raise notice '    NO PARAMS';
+            return '{}'::text[];
         end if;
-
-        -- raise notice 'type_sig_array after splitting into individual exprs: %', param_exprs;
+        raise notice 'type_sig_array after splitting into individual exprs (length %): %', len, param_exprs;
         for i in 1..len
         loop
+            good_type := null;
             -- split by spaces (but not spaces within quotes)
-            param_expr = regexp_split_to_array(param_exprs[i], E'(?<!\\\\)\\s+');
-            -- param_expr = meta._split_string_with_quotes(param_exprs[i]); -- regexp_split_to_array(param_exprs[i], E'(?<!\\\\)\\s+');
-            -- raise notice '    type_sig_array expr: %, length is %', param_expr, array_length(param_expr,1);
+            param_expr = meta.split_quoted_string(param_exprs[i], ' ');
+            len2 := array_length(param_expr,1);
+            raise notice '    !!! type_sig_array expr: %, length is %', param_expr, len2;
+            for j in 1..len2 loop
+                cast_try := array_to_string(param_expr[j:],' ');
+                -- raise notice '    !!! casting % to ::regtype', cast_try;
+                begin
+                    execute format('select %L::regtype', cast_try) into good_type;
+                exception when others then
+                    -- raise notice '        couldnt cast %', cast_try; 
+                end;
 
-            sig_len := array_length(param_expr,1);
+                if good_type is not null then
+                    -- raise notice '    GOT A TYPE!! %', good_type;
+                    sig_array := array_append(sig_array, good_type);
+					exit;
+                else
+                    -- raise notice '    Fail.';
+                end if;
+            end loop;
 
-            -- OUT x int
-            if sig_len = 3 then
-                if param_expr[1] = 'OUT' or param_expr[1] = 'IN' or param_expr[1] = 'INOUT' then
-                    if param_expr[1] = 'IN' or param_expr[1] = 'INOUT' then
-                        sig_array := array_append(sig_array, param_expr[2]);
-                    -- it's OUT, so skip it
-                    else
-                        -- do nothing
-                    end if;
-                else
-                    -- three params, first is not IN or OUT or INOUT
-                    raise exception 'Unrecognized type_signature expression (three tokens w/ no IN/OUT/INOUT): %', param_expr;
-                end if;
-            -- "IN int" or "x int" or "OUT int", but type is always second token
-            else
-                if sig_len = 2 then
-                    if param_expr[1] != 'OUT' then
-                        sig_array := array_append(sig_array, param_expr[2]);
-                    end if;
-                -- "int"
-                else
-                    if sig_len = 1 then
-                        sig_array := array_append(sig_array, param_expr[1]);
-                    else
-                        raise exception 'Uncrecognized type_signature expression (too many tokens): %', param_expr;
-                    end if;
-                end if;
+            if good_type = null then
+                raise exception 'Could not parse function parameter: %', param_expr;
             end if;
         end loop;
         return sig_array;
@@ -406,7 +430,7 @@ create or replace function meta._get_function_parameters(parameters text) return
         param_len integer;
     begin
         -- raise notice 'get_function_parameters got: %', parameters;
-        param_exprs := regexp_split_to_array(parameters, E'(?<!\\\\)\\s*,\\s*');
+        param_exprs := meta.split_quoted_string(parameters, ',');
 
         params_len := array_length(param_exprs,1);
         if params_len is null or params_len = 0 or param_exprs[1] = '' then
@@ -417,23 +441,11 @@ create or replace function meta._get_function_parameters(parameters text) return
         -- raise notice 'get_function_parameters after splitting into individual exprs: %', param_exprs;
         -- for each parameter, drop OUTs, slice off INOUTs and trim everything past 'DEFAULT'
         for i in 1..params_len loop
-            -- split by spaces (but not spaces within quotes) FIXME: breaks on spaces
-            param_expr = regexp_split_to_array(param_exprs[i], E'(?<!\\\\)\\s+');
-            -- param_expr = meta._split_string_with_quotes(param_exprs[i]); -- regexp_split_to_array(param_exprs[i], E'(?<!\\\\)\\s+');
+            -- split by spaces (but not spaces within quotes)
+            param_expr = meta.split_quoted_string(param_exprs[i],' ');
             param_len := array_length(param_expr,1);
             -- raise notice '    get_function_parameters expr: %, length is %', param_expr, array_length(param_expr,1);
 
-            -- don't skip OUTs.  parameters contains all things in the function's def.
-            /*
-            -- skip OUTs
-            if param_expr[1] != 'OUT' then
-                if param_expr[1] = 'INOUT' then
-                    param_exprs[i] := array_slice(param_expr, 2, param_len);
-                end if;
-
-                result := array_append(result, param_exprs[i]);
-            end if;
-            */
             result := array_append(result, param_exprs[i]);
         end loop;
         return result;
@@ -491,6 +503,7 @@ create or replace view meta.function_pg as
         meta._get_function_type_sig_array (type_sig) as type_sig,
         meta._get_function_parameters(parameters) as parameters,
         definition,
+        description,
         "type",                 -- immutable | stable | volatile
         return_type,
          -- return_type_id,      -- type_id
@@ -1314,3 +1327,4 @@ exception when others then
     return null;
 end
 $$ language plpgsql stable;
+
