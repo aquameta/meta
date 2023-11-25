@@ -348,7 +348,10 @@ create or replace function meta._get_function_type_sig_array(identity_args text)
         param_exprs := regexp_split_to_array(identity_args, E'(?<!\\\\)\\s*,\\s*');
 
         len := array_length(param_exprs,1);
-        if len is null or len = 0 or param_exprs[1] = '' then -- raise notice '   NO PARAMS'; return '{}'::text[]; end if;
+        if len is null or len = 0 or param_exprs[1] = '' then
+            -- raise notice '   NO PARAMS'; 
+            return '{}'::text[]; 
+        end if;
 
         -- raise notice 'type_sig_array after splitting into individual exprs: %', param_exprs;
         for i in 1..len
@@ -371,7 +374,7 @@ create or replace function meta._get_function_type_sig_array(identity_args text)
                     end if;
                 else
                     -- three params, first is not IN or OUT or INOUT
-                    raise exception 'Unrecognized parameter expression (three tokens w/ no IN/OUT/INOUT): %', parm_expr;
+                    raise exception 'Unrecognized type_signature expression (three tokens w/ no IN/OUT/INOUT): %', param_expr;
                 end if;
             -- "IN int" or "x int" or "OUT int", but type is always second token
             else
@@ -384,47 +387,14 @@ create or replace function meta._get_function_type_sig_array(identity_args text)
                     if sig_len = 1 then
                         sig_array := array_append(sig_array, param_expr[1]);
                     else
-                        raise exception 'Uncrecognized parameter expression (too many tokens): %', param_expr;
+                        raise exception 'Uncrecognized type_signature expression (too many tokens): %', param_expr;
                     end if;
                 end if;
             end if;
         end loop;
         return sig_array;
     end
-$$ language plpgsql stable;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+$$ language plpgsql;
 
 create or replace function meta._get_function_parameters(parameters text) returns text[] as $$
     declare
@@ -439,7 +409,10 @@ create or replace function meta._get_function_parameters(parameters text) return
         param_exprs := regexp_split_to_array(parameters, E'(?<!\\\\)\\s*,\\s*');
 
         params_len := array_length(param_exprs,1);
-        if params_len is null or params_len = 0 or param_exprs[1] = '' then -- raise notice '   NO PARAMS'; return '{}'::text[]; end if;
+        if params_len is null or params_len = 0 or param_exprs[1] = '' then
+            -- raise notice '   NO PARAMS';
+            return '{}'::text[];
+        end if;
 
         -- raise notice 'get_function_parameters after splitting into individual exprs: %', param_exprs;
         -- for each parameter, drop OUTs, slice off INOUTs and trim everything past 'DEFAULT'
@@ -450,18 +423,23 @@ create or replace function meta._get_function_parameters(parameters text) return
             param_len := array_length(param_expr,1);
             -- raise notice '    get_function_parameters expr: %, length is %', param_expr, array_length(param_expr,1);
 
-			-- skip OUTs
-			if param_expr[1] != 'OUT' then
+            -- don't skip OUTs.  parameters contains all things in the function's def.
+            /*
+            -- skip OUTs
+            if param_expr[1] != 'OUT' then
                 if param_expr[1] = 'INOUT' then
                     param_exprs[i] := array_slice(param_expr, 2, param_len);
                 end if;
 
                 result := array_append(result, param_exprs[i]);
             end if;
+            */
+            result := array_append(result, param_exprs[i]);
         end loop;
         return result;
     end
 $$ language plpgsql stable;
+
 
 create or replace view meta.function_pg as
     with orig as (
@@ -517,14 +495,13 @@ create or replace view meta.function_pg as
         return_type,
          -- return_type_id,      -- type_id
         language,
-        false as returns_set,   -- boolean
+        -- false as returns_set,   -- boolean
         "parallel",             -- restricted | safe | unsafe
         volatility,
-         -- access_privileges,
+        access_privileges,
         security                -- definer | invoker
 
     from orig;
-
 
 -- generates function parameter expressions from vars in information_schema
 create or replace function meta.stmt_function_parameter_def(
