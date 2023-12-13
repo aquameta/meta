@@ -1,75 +1,11 @@
 /******************************************************************************
-Meta-Id Generator
-
-Generates the meta-identifiers for PostgreSQL DDL entities, along with appropriate constructors,
-casts and operators, called "components".  Here is a general description of the type, and each of
-the components that are generated to support it.
-
-## Identifier, "create type"
-
-Each meta-identifier (e.g. schema_id, table_id, column_id, etc.) is a composite type that
-encapsulates the variables necessary to uniquely identify some entity in PostgreSQL.  For example, a
-column is uniquely identified by a schema name, relation name and column name.  Identifiers don't
-describe the entity, they just serve as an identifier.  Actual entity descriptions go in the meta
-system catalog, which uses these identifiers as the "soft" parimary key of each view, typically
-called `id`.
-
-
-
-## TYPE Constructr Function
-
-Meta-identifiers are composite types.  In PostgreSQL, composite types are instantiated via
-`row('public','my_table', 'id')::column_id`, but this isn't very pretty, so each meta-id also has a
-constructor function whose arguments are the same as the arguments you would pass to row().
-
-Instead of:
-    select row('public','my_table','my_column')::meta.column_id
-We generate a nice constructor:
-    create function column_id(schema, relation, name) returns meta.column_id
-and then instantiate a column_id via the constructor:
-    select meta.column_id('public','monkeys','name');
-
-
-
-## CAST to json/jsonb
-
-Each type can be cast to either json or jsonb:
-    select meta.column_id::jsonb
-
-A cast needs several components:
-    - type_to_jsonb_comparator_function
-    - type_to_jsonb_comparator_op
-    - type_to_jsonb_type_constructor_function
-    - type_to_jsonb_cast
-
-
-
-## Downcasts
-
-When appropriate, an identifier can be "downcast" to a less-specific identifier.  For example a
-column_id can be cast to a relation_id or a schema_id.  When appropriate, these casts are generated.
-
-
-
-## CAST to "meta_id"
-
-TODO: I don't remember what these are and I think they might be useless.
-
-
-
-Together, these components make up a meta-identifer.
-
+* Meta Generator
 ******************************************************************************/
-
 drop schema if exists meta_meta cascade;
 create schema meta_meta;
 
-/*
-drop schema if exists meta cascade;
-create schema meta;
-*/
-
 create extension if not exists hstore schema public;
+
 begin;
 
 /*
@@ -142,11 +78,12 @@ insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_typ
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_column', '{"schema_name", "name"}', '{"text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('table_privilege', '{"schema_name", "relation_name", "role", "type"}', '{"text","text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('policy', '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
-insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('key', '{"column_names", "values"}', '{"text[]","text[]"}');
 
-/*
 
-*/
+
+
+
+
 
 
 insert into meta_meta.pg_entity_component(position,name,"type") values (1,'type', 'type');
@@ -155,10 +92,10 @@ insert into meta_meta.pg_entity_component(position,name,"type") values (3,'meta_
 
 -- type to jsonb
 -- TODO: these are disabled because they were breaking endpoint.  fix.
---insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_jsonb_comparator_function', 'function');
---insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_comparator_op', 'op');
---insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_type_constructor_function', 'function');
---insert into meta_meta.pg_entity_component(position,name,"type") values (7,'type_to_jsonb_cast', 'cast');
+insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_jsonb_comparator_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_comparator_op', 'op');
+insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (7,'type_to_jsonb_cast', 'cast');
 
 -- type to json
 insert into meta_meta.pg_entity_component(position,name,"type") values (8,'type_to_json_comparator_function', 'function');
