@@ -29,31 +29,34 @@ be able to easily evolve to accomodate additional features.  Requests are welcom
 
 Meta-identifiers are generated for the following PostgreSQL entities:
 
-- schema
-- type
-- cast
-- operator
-- sequence
-- relation
-- table
-- view
-- column
-- foreign_key
-- row
-- field
-- function
-- trigger
-- role
-- connection
-- constraint
-- constraint_unique
-- constraint_check
-- extension
-- foreign_data_wrapper
-- foreign_server
-- foreign_table
-- foreign_column
-- table_privilege
+```
+create type meta.cast_id as (source_type_schema_name text,source_type_name text,target_type_schema_name text,target_type_name text);
+create type meta.column_id as (schema_name text,relation_name text,name text);
+create type meta.connection_id as (pid int4,connection_start timestamptz);
+create type meta.constraint_id as (schema_name text,relation_name text,name text);
+create type meta.constraint_check_id as (schema_name text,table_name text,name text,column_names text);
+create type meta.constraint_unique_id as (schema_name text,table_name text,name text,column_names text);
+create type meta.extension_id as (name text);
+create type meta.field_id as (schema_name text,relation_name text,pk_column_name text,pk_value text,column_name text);
+create type meta.foreign_column_id as (schema_name text,name text);
+create type meta.foreign_data_wrapper_id as (name text);
+create type meta.foreign_key_id as (schema_name text,relation_name text,name text);
+create type meta.foreign_server_id as (name text);
+create type meta.foreign_table_id as (schema_name text,name text);
+create type meta.function_id as (schema_name text,name text,parameters text[]);
+create type meta.operator_id as (schema_name text,name text,left_arg_type_schema_name text,left_arg_type_name text,right_arg_type_schema_name text,right_arg_type_name text);
+create type meta.policy_id as (schema_name text,relation_name text,name text);
+create type meta.relation_id as (schema_name text,name text);
+create type meta.role_id as (name text);
+create type meta.row_id as (schema_name text,relation_name text,pk_column_name text,pk_value text);
+create type meta.schema_id as (name text);
+create type meta.sequence_id as (schema_name text,name text);
+create type meta.table_id as (schema_name text,name text);
+create type meta.table_privilege_id as (schema_name text,relation_name text,role text,type text);
+create type meta.trigger_id as (schema_name text,relation_name text,name text);
+create type meta.type_id as (schema_name text,name text);
+create type meta.view_id as (schema_name text,name text);
+```
 
 
 ## 3. Components
