@@ -1,47 +1,16 @@
 /******************************************************************************
-Meta Generator
-* Generates the writable system catalog.
-
-Each meta-identifier (e.g. schema_id, table_id, column_id, etc.) is a composite
-type that encapsulates the variables necessary to uniquely identify some entity
-in PostgreSQL.  For example, a column is uniquely identified by a schema name,
-relation name and column name.  Identifiers don't describe the entity, they
-just serve as an identifier.  They're very useful for doing any kind of
-meta-programming.
-
-PostgreSQL composite types are instantiated via `row('public','my_table',
-'id')::column_id`, but this isn't very pretty, so each meta-id also has a
-constructor function whose arguments are the same as the arguments you would
-pass to row().
-
-Instead of:
-
-select row('public','my_table','my_column')::meta.column_id
-
-The 
-- create function column_id(schema, relation, name) returns meta.column_id
-
-Each composite type can be represented as other types as well:
-
-- `json` - PostgreSQL's JSON type
-- `jsonb` - PostgreSQL's binary JSON type
-- `meta_id` - A custom type for representing meta identifiers as text strings
+* Meta Generator
 ******************************************************************************/
-
 drop schema if exists meta_meta cascade;
 create schema meta_meta;
 
-/*
-drop schema if exists meta cascade;
-create schema meta;
-*/
-
 create extension if not exists hstore schema public;
+
 begin;
 
 /*
  * pg_entity: 
- * Something PostgreSQL that meta tracks, e.g. table, column, schema, view, etc.
+ * A type of identifiable thing in PostgreSQL:  e.g. table, column, schema, view, function, etc.
  */
 create table meta_meta.pg_entity (
 	id serial not null primary key,
@@ -56,40 +25,18 @@ create table meta_meta.pg_entity (
 /*
  * pg_entity_component
  *
- * Every entity needs these components (type, casts to/from jsonb with their
- * operators and function, casts to/from text, a catalog view)
+ * Each entity's identifier gets supported by a number of "components" that support the CREATE TYPE
+ * statement with nicities like constructors, casts, etc.  These "components" are generated along
+ * with the identifier's TYPE declaration.
  */
 
 create table meta_meta.pg_entity_component (
 	id serial not null primary key,
-    name text,
-    position integer,
-    "type" text
+    name text, -- create type $name
+    position integer, -- the sequential position this entity's id is generate ind -- because they compound
+    "type" text -- create $type $name -- e.g. function, type, op etc
 );
 
-
-/*
- * type meta_id
- *
-The `meta_id` type is just a text string representation of an identifier, for
-example `'schema/public'` or `'column/public/my_table/id'`.  The general format
-of the type is `'{entity}[/arg]+'`.  They provide syntactic sugar for more
-readable code, and also simple validation checks.  They do not check that the
-identifier points to a PostgreSQL entity that actually exists, because
-sometimes this is not desirable and would certainly incur undue performance
-overhead.  However they do check for valid arguments, and ensure that the
-identifier points to an entity that *could* exist.
-
-Some plausible example usages:
-
-```
-select 'column/public/my_table/id'::meta.column_id;
-select meta.column_id('public','my_table','id')
-select meta.schema_id(meta.column_id('public','my_table','id').schema);
-select meta.column_id('public','my_table','id')::meta.schema_id;
-```
-
- */
 
 create schema meta;
 create type meta.meta_id as (id text);
@@ -132,9 +79,11 @@ insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_typ
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('table_privilege', '{"schema_name", "relation_name", "role", "type"}', '{"text","text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('policy', '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
 
-/*
 
-*/
+
+
+
+
 
 
 insert into meta_meta.pg_entity_component(position,name,"type") values (1,'type', 'type');
@@ -142,37 +91,43 @@ insert into meta_meta.pg_entity_component(position,name,"type") values (2,'type_
 insert into meta_meta.pg_entity_component(position,name,"type") values (3,'meta_id_constructor', 'function');
 
 -- type to jsonb
---insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_jsonb_comparator_function', 'function');
---insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_comparator_op', 'op');
---insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_type_constructor_function', 'function');
---insert into meta_meta.pg_entity_component(position,name,"type") values (7,'type_to_jsonb_cast', 'cast');
+-- TODO: these are disabled because they were breaking endpoint.  fix.
+insert into meta_meta.pg_entity_component(position,name,"type") values (4,'type_to_jsonb_comparator_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (5,'type_to_jsonb_comparator_op', 'op');
+insert into meta_meta.pg_entity_component(position,name,"type") values (6,'type_to_jsonb_type_constructor_function', 'function');
+insert into meta_meta.pg_entity_component(position,name,"type") values (7,'type_to_jsonb_cast', 'cast');
 
--- type to jsonb
+-- type to json
 insert into meta_meta.pg_entity_component(position,name,"type") values (8,'type_to_json_comparator_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (9,'type_to_json_comparator_op', 'op');
 insert into meta_meta.pg_entity_component(position,name,"type") values (10,'type_to_json_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (11,'type_to_json_cast', 'cast');
 
--- type to schema_id
+-- type downcast to schema_id
 insert into meta_meta.pg_entity_component(position,name,"type") values (20,'type_to_schema_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (21,'type_to_schema_cast', 'cast');
 
--- type to relation_id
+-- type downcast to relation_id
 insert into meta_meta.pg_entity_component(position,name,"type") values (22,'type_to_relation_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (23,'type_to_relation_cast', 'cast');
 
--- type to column_id
+-- type downcast to column_id
 insert into meta_meta.pg_entity_component(position,name,"type") values (24,'type_to_column_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (25,'type_to_column_cast', 'cast');
 
--- type to row_id
+-- type downcast to row_id
 -- this is only for field_id, nothing else has a row_id.
+-- TODO: why is this disabled again?
 /*
 insert into meta_meta.pg_entity_component(position,name,"type") values (26,'type_to_row_type_constructor_function', 'function');
 insert into meta_meta.pg_entity_component(position,name,"type") values (27,'type_to_row_cast', 'cast');
 */
 
 /*
+
+Maybe someday we generate stubs for the system catalog with this thing too.  Not sure that space is
+quite this uniform or simple, though.
+
 insert into meta_meta.pg_entity_component(name,"type") values ('relation', 'view');
 insert into meta_meta.pg_entity_component(name,"type") values ('relation_create_stmt_function', 'function');
 insert into meta_meta.pg_entity_component(name,"type") values ('relation_insert_trigger_function', 'function');
