@@ -95,6 +95,6 @@ The system catalog contains the following views:
 - type
 - view
 
-![meta schema diagram](https://raw.githubusercontent.com/aquametalabs/meta/master/doc/meta.png)
+![meta schema diagram](https://raw.githubusercontent.com/aquametalabs/meta/master/doc/meta-schema-diagram.png)
 
 
