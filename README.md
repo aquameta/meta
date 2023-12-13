@@ -1,11 +1,38 @@
-# Meta: Simple system catalog extension for PostgreSQL
+Meta: Simplified System Catalog for PostgreSQL
+==============================================
 
-This extension provides two facilities:
+# Overview
 
-1. A set of "meta-identifiers", PostgreSQL types that unambiguously reference database objects like tables, views, schemas, roles, etc.
-2. A normalized system catalog similar in function to `pg_catalog` or `information_schema`, but laid out more readably.
+System catalogs are great, because they provide a data-centric view into the database's structure.
+PostgreSQL has two system catalogs, `pg_catalog` and `information_schema`, but each have some
+drawbacks.  `pg_catalog` mirrors PostgreSQL's *internal* structure, and centers around `oid`, object
+identifiers that aren't intended for "above the hood" developers to know or care about.
+`information_schema` is part of the SQL standard, and is filled with many views and columns that
+don't match PostgreSQL's terminology or features.
 
-Optionally, the [meta_triggers](https://github.com/aquametalabs/meta_triggers) extension can be installed as well, which makes the views writable, so that for example a schema can be created using an `insert` statement.
+The goals with `meta` is to provide an "above the hood" system catalog for PostgreSQL that is
+normalized and uses common names for views and columns.
+
+Features:
+
+- Meta System catalog:  ~30 views ([full list]()) that, under the hood, query and synthesize
+  `pg_catalog` and `information_schema`
+- Meta-identifiers:  A set of composite types that encapsulate variables necessary to identify
+  PostgreSQL objects (tables, columns, casts, types, etc.) by name, and serve as "soft" primary keys
+  to the views above.  See [meta-identifiers](generator/) for more.
+- Catalog triggers:  Optional [meta_triggers](https://github.com/aquametalabs/meta_triggers)
+  extension, which adds INSERT/UPDATE triggers on the catalog's views.  These triggers make it
+  possible to do DDL statements (e.g. `CREATE TABLE ...`) with an DML statement (e.g. `insert into
+  meta.table (name) values('foo'))`, similar to a schema diff and migration tool but with a
+  data-centric approach.
+
+Status:
+
+- The catalog is still evolving.  The goal is to mirror PostgreSQL's architecture completely and
+  accurately, but we're still figuring out "where to draw the lines".
+- Most common PostgreSQL features are covered, but PostgreSQL is very large, and 100% coverage is
+  not complete.
+- Not every feature has read/write triggers
 
 # Install
 
@@ -31,34 +58,15 @@ Optionally, install the [meta_triggers](https://github.com/aquametalabs/meta_tri
 
 # Documentation
 
-## Schema Diagram
-
-![meta schema diagram](https://raw.githubusercontent.com/aquametalabs/meta/master/doc/meta.png)
-
 ## Meta-Identifiers Type System
 
-- cast_id ( source_type meta.type_id, target_type meta.type_id )
-- column_id ( relation_id meta.relation_id, name text )
-- connection_id ( pid integer, connection_start timestamp with time zone )
-- constraint_id ( table_id meta.relation_id, name text )
-- extension_id ( name text )
-- field_id ( row_id meta.row_id, column_id meta.column_id )
-- foreign_data_wrapper_id ( name text )
-- foreign_key_id ( relation_id meta.relation_id, name text )
-- foreign_server_id ( name text )
-- function_id ( schema_id meta.schema_id, name text, parameters text[] )
-- operator_id ( schema_id meta.schema_id, name text, left_arg_type_id meta.type_id, right_arg_type_id meta.type_id )
-- policy_id ( relation_id meta.relation_id, name text )
-- relation_id ( schema_id meta.schema_id, name text )
-- role_id ( name text )
-- row_id ( pk_column_id meta.column_id, pk_value text )
-- schema_id ( name text )
-- sequence_id ( schema_id meta.schema_id, name text )
-- table_privilege_id ( relation_id meta.relation_id, role_id meta.role_id, type text )
-- trigger_id ( relation_id meta.relation_id, name text )
-- type_id ( schema_id meta.schema_id, name text )
+See [identifiers](generator/).
 
-## Views
+
+## System Catalog
+
+The system catalog contains the following views:
+
 - cast
 - column
 - connection
@@ -86,3 +94,7 @@ Optionally, install the [meta_triggers](https://github.com/aquametalabs/meta_tri
 - trigger
 - type
 - view
+
+![meta schema diagram](https://raw.githubusercontent.com/aquametalabs/meta/master/doc/meta.png)
+
+
