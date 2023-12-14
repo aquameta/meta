@@ -1295,16 +1295,29 @@ create view meta.foreign_column as
 create or replace function meta.row_exists(in row_id meta.row_id, out answer boolean) as $$
     declare
         stmt text;
+		pk_comparisons text[];
+		pk_comparison_stmt text;
+		column_name text;
+		i integer;
     begin
+        -- generate the pk comparisons line
+        i := 1;
+        foreach column_name in array row_id.pk_column_names loop
+            pk_comparisons[i] := quote_ident((row_id).pk_column_names[i]) || '::text = ' || quote_literal((row_id).pk_values[i]);
+            i := i + 1;
+        end loop;
+        pk_comparison_stmt := array_to_string(pk_comparisons, ' and ');
+
+
         stmt := format (
-            'select (count(*) = 1) from %I.%I where %I::text = %L',
+            -- 'select (count(*) = 1) from %I.%I where %I::text = %L',
+            'select (count(*) = 1) from %I.%I where %s',
                 (row_id).schema_name,
                 (row_id).relation_name,
-                (row_id).pk_column_name,
-                (row_id).pk_value
+				pk_comparison_stmt
             );
 
-        -- raise warning '%s', stmt;
+        raise debug '%', stmt;
         execute stmt into answer;
 
     exception
