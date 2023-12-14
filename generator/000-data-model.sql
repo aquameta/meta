@@ -63,7 +63,7 @@ insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_typ
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('view',        '{"schema_name", "name"}', '{"text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('column',      '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('foreign_key', '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
-insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('row',         '{"schema_name", "relation_name", "pk_columns", "pk_values"}', '{"text","text","text[]","text[]"}');
+insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('row',         '{"schema_name", "relation_name", "pk_column_names", "pk_values"}', '{"text","text","text[]","text[]"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('field',       '{"schema_name", "relation_name", "pk_column_name", "pk_value", "column_name"}', '{"text","text","text","text","text"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('function',    '{"schema_name", "name", "parameters"}', '{"text","text","text[]"}');
 insert into meta_meta.pg_entity(name, constructor_arg_names, constructor_arg_types) values ('trigger',     '{"schema_name", "relation_name", "name"}', '{"text","text","text"}');
