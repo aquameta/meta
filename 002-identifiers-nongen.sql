@@ -1,16 +1,30 @@
 set search_path=meta;
 
 -- for some reason, generator isn't generating these.  they're commented out.
-create function meta.field_id_to_row_id(field_id meta.field_id) returns meta.row_id as $_$select meta.row_id((field_id).schema_name, (field_id).relation_name, (field_id).pk_column_name, (field_id).pk_value) $_$ immutable language sql;
+create function meta.field_id_to_row_id(field_id meta.field_id) returns meta.row_id as $_$ select meta.row_id((field_id).schema_name, (field_id).relation_name, (field_id).pk_column_names, (field_id).pk_values) $_$ immutable language sql;
 create cast (meta.field_id as meta.row_id) with function meta.field_id_to_row_id(meta.field_id) as assignment;
+
+
+------------------------------------------------------------------------
+-- helpers
+-- non-standard constructors that do sensible things
+------------------------------------------------------------------------
+
+-- field_id constructor taking a row_id
+create function meta.field_id(row_id meta.row_id, column_name text) returns meta.field_id as $$
+    select meta.field_id(row_id.schema_name, row_id.relation_name, row_id.pk_column_names, row_id.pk_values, column_name);
+$$ language sql;
 
 
 -- single key row_id constructor
 create function meta.row_id(schema_name text, relation_name text, pk_column_name text, pk_value text) returns meta.row_id as $_$ select meta.row_id(schema_name, relation_name, array[pk_column_name], array[pk_value]) $_$ immutable language sql;
 
 
-
+------------------------------------------------------------------------
+-- pk_stmt()
 -- helper function for iterating primary key arrays and generating a stmt fragment.
+------------------------------------------------------------------------
+
 -- template is rendered by format(), using positional argument notation.
 --     1: pk_column_names[i]
 --     2: pk_values[i]
