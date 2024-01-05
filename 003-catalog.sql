@@ -320,22 +320,22 @@ select meta.constraint_id(from_schema_name, from_table_name, constraint_name),
     to_schema_name::text,
     to_table_name::text,
     array_agg(to_column_name::text order by to_col_key_position) as to_column_names,
-	match_option::text,
-	update_rule::text,
-	delete_rule::text
+    match_option::text,
+    update_rule::text,
+    delete_rule::text
 from (
     select
         c.conname as constraint_name,
-		ns.nspname as from_schema_name,
-		cl.relname as from_table_name,
+        ns.nspname as from_schema_name,
+        cl.relname as from_table_name,
         a.attname as from_column_name,
-		from_cols.elem as from_column_num,
-		from_cols.nr as from_col_key_position,
+        from_cols.elem as from_column_num,
+        from_cols.nr as from_col_key_position,
         to_ns.nspname as to_schema_name,
         to_cl.relname as to_table_name,
         to_a.attname as to_column_name,
-		to_cols.elem as to_column_num,
-		to_cols.nr as to_col_key_position,
+        to_cols.elem as to_column_num,
+        to_cols.nr as to_col_key_position,
 
 /* big gank from information_schema.referential_constraints view */
         CASE c.confmatchtype
@@ -1364,10 +1364,10 @@ create view meta.foreign_column as
 create or replace function meta.row_exists(in row_id meta.row_id, out answer boolean) as $$
     declare
         stmt text;
-		pk_comparisons text[];
-		pk_comparison_stmt text;
-		column_name text;
-		i integer;
+        pk_comparisons text[];
+        pk_comparison_stmt text;
+        column_name text;
+        i integer;
     begin
         -- generate the pk comparisons line
         i := 1;
@@ -1383,7 +1383,7 @@ create or replace function meta.row_exists(in row_id meta.row_id, out answer boo
             'select (count(*) = 1) from %I.%I where %s',
                 (row_id).schema_name,
                 (row_id).relation_name,
-				pk_comparison_stmt
+                pk_comparison_stmt
             );
 
         raise debug '%', stmt;
