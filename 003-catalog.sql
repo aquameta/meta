@@ -192,11 +192,6 @@ create view meta.table as
            schemaname::text as schema_name,
            tablename::text as name,
            rowsecurity as rowsecurity
-    /*
-    -- going from pg_catalog.pg_tables instead, so we can get rowsecurity
-    from information_schema.tables
-    where table_type = 'BASE TABLE';
-    */
     from pg_catalog.pg_tables;
 
 
@@ -277,42 +272,8 @@ create view meta.relation as
 /******************************************************************************
  * meta.foreign_key
  *****************************************************************************/
-create view meta.foreign_key as
-    select meta.foreign_key_id(tc.table_schema, tc.table_name, tc.constraint_name) as id,
-           meta.relation_id(tc.table_schema, tc.table_name) as table_id,
-           tc.table_schema::text as schema_name,
-           tc.table_name::text as table_name,
-           tc.constraint_name::text as name,
-           array_agg(meta.column_id(kcu.table_schema, kcu.table_name, kcu.column_name)) as from_column_ids,
-           array_agg(meta.column_id(ccu.table_schema, ccu.table_name, ccu.column_name)) as to_column_ids,
-           update_rule::text as on_update,
-           delete_rule::text as on_delete
-
-    from information_schema.table_constraints tc
-
-    inner join information_schema.referential_constraints rc
-            on rc.constraint_catalog = tc.constraint_catalog and
-               rc.constraint_schema = tc.constraint_schema and
-               rc.constraint_name = tc.constraint_name
-
-    inner join information_schema.constraint_column_usage ccu
-            on ccu.constraint_catalog = tc.constraint_catalog and
-               ccu.constraint_schema = tc.constraint_schema and
-               ccu.constraint_name = tc.constraint_name
-
-    inner join information_schema.key_column_usage kcu
-            on kcu.constraint_catalog = tc.constraint_catalog and
-               kcu.constraint_schema = tc.constraint_schema and
-               kcu.constraint_name = tc.constraint_name
-
-    where constraint_type = 'FOREIGN KEY'
-
-    group by tc.table_schema, tc.table_name, tc.constraint_name, update_rule, delete_rule;
-
-
-
-create or replace view meta.foreign_key_pg as
-select meta.constraint_id(from_schema_name, from_table_name, constraint_name),
+create or replace view meta.foreign_key as
+select meta.constraint_id(from_schema_name, from_table_name, constraint_name) as id,
     constraint_name::text as name,
     from_schema_name::text as schema_name,
     from_table_name::text as table_name,
@@ -351,7 +312,7 @@ from (
             WHEN 'r'::"char" THEN 'RESTRICT'::text
             WHEN 'a'::"char" THEN 'NO ACTION'::text
             ELSE NULL::text
-        END::information_schema.character_data AS update_rule,
+        END::information_schema.character_data AS on_update,
         CASE c.confdeltype
             WHEN 'c'::"char" THEN 'CASCADE'::text
             WHEN 'n'::"char" THEN 'SET NULL'::text
