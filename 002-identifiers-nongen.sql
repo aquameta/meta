@@ -75,3 +75,71 @@ create function meta._pk_stmt(row_id meta.row_id, template text, delimeter text 
 $$ language sql;
 
 
+create or replace function meta.field_id_literal_value(field_id meta.field_id, use_meta_materialized boolean default false) returns text as $$
+declare
+    literal_value text;
+    relation_name text;
+    stmt text;
+begin
+    relation_name := (field_id).relation_name;
+    if (field_id).schema_name = 'meta' and use_meta_materialized = 't' then
+        relation_name := 'mat_' || relation_name;
+        -- raise notice '-------- using meta_mat for field_id %', field_id;
+    end if;
+
+    stmt := format('select %I::text from %I.%I where %I::text = %L',
+        (field_id).column_name,
+        (field_id).schema_name,
+        relation_name,
+        (field_id).pk_column_name,
+        (field_id).pk_value);
+
+    execute stmt into literal_value;
+
+    if use_meta_materialized = 't' then
+        -- raise notice 'stmt: %', stmt;
+    end if;
+
+    return literal_value;
+-- TODO: is this correct?
+exception when others then
+    raise warning 'field_id_literal_value exception on %: %', field_id, SQLERRM;
+    return null;
+end
+$$ language plpgsql stable;
+
+
+
+create or replace function meta.row_exists(in row_id meta.row_id, out answer boolean) as $$
+    declare
+        stmt text;
+        pk_comparisons text[];
+        pk_comparison_stmt text;
+        column_name text;
+        i integer;
+    begin
+        -- generate the pk comparisons line
+        i := 1;
+        foreach column_name in array row_id.pk_column_names loop
+            pk_comparisons[i] := quote_ident((row_id).pk_column_names[i]) || '::text = ' || quote_literal((row_id).pk_values[i]);
+            i := i + 1;
+        end loop;
+        pk_comparison_stmt := array_to_string(pk_comparisons, ' and ');
+
+
+        stmt := format (
+            -- 'select (count(*) = 1) from %I.%I where %I::text = %L',
+            'select (count(*) = 1) from %I.%I where %s',
+                (row_id).schema_name,
+                (row_id).relation_name,
+                pk_comparison_stmt
+            );
+
+        raise debug '%', stmt;
+        execute stmt into answer;
+
+    exception
+        when undefined_table then
+            answer := false;
+    end;
+$$ language plpgsql;
