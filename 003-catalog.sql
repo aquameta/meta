@@ -274,21 +274,21 @@ create view meta.relation as
  *****************************************************************************/
 create or replace view meta.foreign_key as
 select meta.constraint_id(from_schema_name, from_table_name, constraint_name) as id,
-    constraint_name::text as name,
     from_schema_name::text as schema_name,
     from_table_name::text as table_name,
+    constraint_name::text,
     array_agg(from_column_name::text order by from_col_key_position) as from_column_names,
     to_schema_name::text,
     to_table_name::text,
     array_agg(to_column_name::text order by to_col_key_position) as to_column_names,
     match_option::text,
-    update_rule::text,
-    delete_rule::text
+    on_update::text,
+    on_delete::text
 from (
     select
-        c.conname as constraint_name,
         ns.nspname as from_schema_name,
         cl.relname as from_table_name,
+        c.conname as constraint_name,
         a.attname as from_column_name,
         from_cols.elem as from_column_num,
         from_cols.nr as from_col_key_position,
@@ -302,7 +302,7 @@ from (
         CASE c.confmatchtype
             WHEN 'f'::"char" THEN 'FULL'::text
             WHEN 'p'::"char" THEN 'PARTIAL'::text
-            WHEN 's'::"char" THEN 'NONE'::text
+            WHEN 's'::"char" THEN 'SIMPLE'::text -- was 'NONE'
             ELSE NULL::text
         END::information_schema.character_data AS match_option,
         CASE c.confupdtype
@@ -320,7 +320,7 @@ from (
             WHEN 'r'::"char" THEN 'RESTRICT'::text
             WHEN 'a'::"char" THEN 'NO ACTION'::text
             ELSE NULL::text
-        END::information_schema.character_data AS delete_rule
+        END::information_schema.character_data AS on_delete
 /* end big gank */
 
     from pg_constraint c
@@ -449,7 +449,7 @@ create or replace function meta._get_function_type_sig_array(identity_args text)
                 begin
                     execute format('select %L::regtype', cast_try) into good_type;
                 exception when others then
-                    -- raise notice '        couldnt cast %', cast_try; 
+                    -- raise notice '        couldnt cast %', cast_try;
                 end;
 
                 if good_type is not null then
@@ -541,7 +541,7 @@ create or replace view meta.function as
         -- ORDER BY 1, 2, 4;
     )
 
-    select 
+    select
         meta.function_id(
             schema_name,
             name,
