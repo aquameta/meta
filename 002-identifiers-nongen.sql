@@ -16,6 +16,12 @@ create function meta.field_id(row_id meta.row_id, column_name text) returns meta
 $$ language sql;
 
 
+-- field_id constructor non-array pk
+create function meta.field_id( schema_name text, relation_name text, pk_column_name text, pk_value text, column_name text) returns meta.field_id as $$
+    select meta.field_id(schema_name, relation_name, array[pk_column_name], array[pk_value], column_name);
+$$ language sql;
+
+
 -- single key row_id constructor
 create function meta.row_id(schema_name text, relation_name text, pk_column_name text, pk_value text) returns meta.row_id as $_$ select meta.row_id(schema_name, relation_name, array[pk_column_name], array[pk_value]) $_$ immutable language sql;
 
