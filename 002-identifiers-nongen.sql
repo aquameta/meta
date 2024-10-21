@@ -75,33 +75,30 @@ create function meta._pk_stmt(row_id meta.row_id, template text, delimeter text 
 $$ language sql;
 
 
-create or replace function meta.field_id_literal_value(field_id meta.field_id, use_meta_materialized boolean default false) returns text as $$
+create or replace function meta.field_id_literal_value(field_id meta.field_id) returns text as $$
 declare
     literal_value text;
-    relation_name text;
     stmt text;
+    pk_stmt text;
 begin
-    relation_name := (field_id).relation_name;
-    if (field_id).schema_name = 'meta' and use_meta_materialized = 't' then
-        relation_name := 'mat_' || relation_name;
-        -- raise notice '-------- using meta_mat for field_id %', field_id;
-    end if;
+    pk_stmt := meta._pk_stmt (
+        (field_id).pk_column_names,
+        (field_id).pk_values,
+        '%1$I = %2$L'
+    );
 
-    stmt := format('select %I::text from %I.%I where %I::text = %L',
+    stmt := format('select %I::text from %I.%I where %s',
         (field_id).column_name,
         (field_id).schema_name,
-        relation_name,
-        (field_id).pk_column_name,
-        (field_id).pk_value);
+        (field_id).relation_name,
+        pk_stmt
+    );
+    raise notice 'stmt: %', stmt;
 
     execute stmt into literal_value;
 
-    if use_meta_materialized = 't' then
-        -- raise notice 'stmt: %', stmt;
-    end if;
-
     return literal_value;
--- TODO: is this correct?
+-- TODO: is this correct?  this fires when the table doesn't exist etc.
 exception when others then
     raise warning 'field_id_literal_value exception on %: %', field_id, SQLERRM;
     return null;
