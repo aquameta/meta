@@ -69,7 +69,7 @@ select meta._pk_stmt (
         array[public.uuid_generate_v4()::text,public.uuid_generate_v4()::text]
     ),
     '(row_id).pk_values[%3$s] = x.%1$I',
-	' OR '
+    ' OR '
 );
                               _pk_stmt                              
 --------------------------------------------------------------------
@@ -77,7 +77,7 @@ select meta._pk_stmt (
 */
 
 create function meta._pk_stmt(row_id meta.row_id, template text, delimeter text default ' and ') returns text as $$
-	select meta._pk_stmt((row_id).pk_column_names, (row_id).pk_values, template, delimeter);
+    select meta._pk_stmt((row_id).pk_column_names, (row_id).pk_values, template, delimeter);
 $$ language sql;
 
 
