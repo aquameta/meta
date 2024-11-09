@@ -192,11 +192,6 @@ create view meta.table as
            schemaname::text as schema_name,
            tablename::text as name,
            rowsecurity as rowsecurity
-    /*
-    -- going from pg_catalog.pg_tables instead, so we can get rowsecurity
-    from information_schema.tables
-    where table_type = 'BASE TABLE';
-    */
     from pg_catalog.pg_tables;
 
 
@@ -277,37 +272,72 @@ create view meta.relation as
 /******************************************************************************
  * meta.foreign_key
  *****************************************************************************/
-create view meta.foreign_key as
-    select meta.foreign_key_id(tc.table_schema, tc.table_name, tc.constraint_name) as id,
-           meta.relation_id(tc.table_schema, tc.table_name) as table_id,
-           tc.table_schema::text as schema_name,
-           tc.table_name::text as table_name,
-           tc.constraint_name::text as name,
-           array_agg(meta.column_id(kcu.table_schema, kcu.table_name, kcu.column_name)) as from_column_ids,
-           array_agg(meta.column_id(ccu.table_schema, ccu.table_name, ccu.column_name)) as to_column_ids,
-           update_rule::text as on_update,
-           delete_rule::text as on_delete
+create or replace view meta.foreign_key as
+select meta.constraint_id(from_schema_name, from_table_name, constraint_name) as id,
+    from_schema_name::text as schema_name,
+    from_table_name::text as table_name,
+    constraint_name::text,
+    array_agg(from_column_name::text order by from_col_key_position) as from_column_names,
+    to_schema_name::text,
+    to_table_name::text,
+    array_agg(to_column_name::text order by to_col_key_position) as to_column_names,
+    match_option::text,
+    on_update::text,
+    on_delete::text
+from (
+    select
+        ns.nspname as from_schema_name,
+        cl.relname as from_table_name,
+        c.conname as constraint_name,
+        a.attname as from_column_name,
+        from_cols.elem as from_column_num,
+        from_cols.nr as from_col_key_position,
+        to_ns.nspname as to_schema_name,
+        to_cl.relname as to_table_name,
+        to_a.attname as to_column_name,
+        to_cols.elem as to_column_num,
+        to_cols.nr as to_col_key_position,
 
-    from information_schema.table_constraints tc
+/* big gank from information_schema.referential_constraints view */
+        CASE c.confmatchtype
+            WHEN 'f'::"char" THEN 'FULL'::text
+            WHEN 'p'::"char" THEN 'PARTIAL'::text
+            WHEN 's'::"char" THEN 'SIMPLE'::text -- was 'NONE'
+            ELSE NULL::text
+        END::information_schema.character_data AS match_option,
+        CASE c.confupdtype
+            WHEN 'c'::"char" THEN 'CASCADE'::text
+            WHEN 'n'::"char" THEN 'SET NULL'::text
+            WHEN 'd'::"char" THEN 'SET DEFAULT'::text
+            WHEN 'r'::"char" THEN 'RESTRICT'::text
+            WHEN 'a'::"char" THEN 'NO ACTION'::text
+            ELSE NULL::text
+        END::information_schema.character_data AS on_update,
+        CASE c.confdeltype
+            WHEN 'c'::"char" THEN 'CASCADE'::text
+            WHEN 'n'::"char" THEN 'SET NULL'::text
+            WHEN 'd'::"char" THEN 'SET DEFAULT'::text
+            WHEN 'r'::"char" THEN 'RESTRICT'::text
+            WHEN 'a'::"char" THEN 'NO ACTION'::text
+            ELSE NULL::text
+        END::information_schema.character_data AS on_delete
+/* end big gank */
 
-    inner join information_schema.referential_constraints rc
-            on rc.constraint_catalog = tc.constraint_catalog and
-               rc.constraint_schema = tc.constraint_schema and
-               rc.constraint_name = tc.constraint_name
+    from pg_constraint c
+    join lateral unnest(c.conkey) with ordinality as from_cols(elem, nr) on true
+    join lateral unnest(c.confkey) with ordinality as to_cols(elem, nr) on to_cols.nr = from_cols.nr -- FTW!
+    join pg_namespace ns on ns.oid = c.connamespace
+    join pg_class cl on cl.oid = c.conrelid
+    join pg_attribute a on a.attrelid = c.conrelid and a.attnum = from_cols.elem
 
-    inner join information_schema.constraint_column_usage ccu
-            on ccu.constraint_catalog = tc.constraint_catalog and
-               ccu.constraint_schema = tc.constraint_schema and
-               ccu.constraint_name = tc.constraint_name
+    -- to_cols
+    join pg_class to_cl on to_cl.oid = c.confrelid
+    join pg_namespace to_ns on to_cl.relnamespace = to_ns.oid
+    join pg_attribute to_a on to_a.attrelid = to_cl.oid and to_a.attnum = to_cols.elem
 
-    inner join information_schema.key_column_usage kcu
-            on kcu.constraint_catalog = tc.constraint_catalog and
-               kcu.constraint_schema = tc.constraint_schema and
-               kcu.constraint_name = tc.constraint_name
-
-    where constraint_type = 'FOREIGN KEY'
-
-    group by tc.table_schema, tc.table_name, tc.constraint_name, update_rule, delete_rule;
+    where contype = 'f'
+) c_cols
+group by 1,2,3,4,6,7,9,10,11;
 
 
 
@@ -419,7 +449,7 @@ create or replace function meta._get_function_type_sig_array(identity_args text)
                 begin
                     execute format('select %L::regtype', cast_try) into good_type;
                 exception when others then
-                    -- raise notice '        couldnt cast %', cast_try; 
+                    -- raise notice '        couldnt cast %', cast_try;
                 end;
 
                 if good_type is not null then
@@ -511,7 +541,7 @@ create or replace view meta.function as
         -- ORDER BY 1, 2, 4;
     )
 
-    select 
+    select
         meta.function_id(
             schema_name,
             name,
@@ -1290,61 +1320,4 @@ create view meta.foreign_column as
     inner join information_schema.columns c
             on c.table_schema = pgn.nspname and
                c.table_name = pgc.relname;
-
-
-create or replace function meta.row_exists(in row_id meta.row_id, out answer boolean) as $$
-    declare
-        stmt text;
-    begin
-        stmt := format (
-            'select (count(*) = 1) from %I.%I where %I::text = %L',
-                (row_id).schema_name,
-                (row_id).relation_name,
-                (row_id).pk_column_name,
-                (row_id).pk_value
-            );
-
-        -- raise warning '%s', stmt;
-        execute stmt into answer;
-
-    exception
-        when undefined_table then
-            answer := false;
-    end;
-$$ language plpgsql;
-
-
-
-create or replace function meta.field_id_literal_value(field_id meta.field_id, use_meta_materialized boolean default false) returns text as $$
-declare
-    literal_value text;
-    relation_name text;
-    stmt text;
-begin
-    relation_name := (field_id).relation_name;
-    if (field_id).schema_name = 'meta' and use_meta_materialized = 't' then
-        relation_name := 'mat_' || relation_name;
-        -- raise notice '-------- using meta_mat for field_id %', field_id;
-    end if;
-
-    stmt := format('select %I::text from %I.%I where %I::text = %L',
-        (field_id).column_name,
-        (field_id).schema_name,
-        relation_name,
-        (field_id).pk_column_name,
-        (field_id).pk_value);
-
-    execute stmt into literal_value;
-
-    if use_meta_materialized = 't' then
-        -- raise notice 'stmt: %', stmt;
-    end if;
-
-    return literal_value;
--- TODO: is this correct?
-exception when others then
-    raise warning 'field_id_literal_value exception on %: %', field_id, SQLERRM;
-    return null;
-end
-$$ language plpgsql stable;
 

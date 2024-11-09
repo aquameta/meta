@@ -216,44 +216,34 @@ create table test_schema.dinghies (
 );
 
 -- insert with table_id
-insert into meta.foreign_key (table_id, name, from_column_ids, to_column_ids, on_update, on_delete)
+insert into meta.foreign_key (schema_name, table_name, constraint_name, from_column_names, to_schema_name, to_table_name, to_column_names, match_option, on_update, on_delete)
 values (
-    meta.relation_id('test_schema', 'pirates'),
+    'test_schema',
+    'pirates',
     'pirate_ship_fk',
-    array[meta.column_id('test_schema', 'pirates', 'ship_id')],
-    array[meta.column_id('test_schema', 'ships', 'id')],
+    array['ship_id'],
+    'test_schema',
+    'ships',
+    array['id'],
+    'simple',
     'cascade',
     'restrict'
 );
 select ok(
     exists(select 1 from meta.foreign_key where id = meta.foreign_key_id('test_schema', 'pirates', 'pirate_ship_fk')),
-    'Foreign key inserted with table_id should exist in meta.foreign_key.'
+    'Foreign key inserted should exist in meta.foreign_key.'
 );
 select fk_ok('test_schema', 'pirates', 'ship_id', 'test_schema', 'ships', 'id', 'Inserted foreign key''s columns should be part of a foreign key.');
 
--- insert with schema_name and table_name
-insert into meta.foreign_key (schema_name, table_name, name, from_column_ids, to_column_ids, on_update, on_delete)
-values (
-    'test_schema',
-    'pirates',
-    'pirate_ship_fk2',
-    array[meta.column_id('test_schema', 'pirates', 'ship_id')],
-    array[meta.column_id('test_schema', 'ships', 'id')],
-    'cascade',
-    'restrict'
-);
-select ok(
-    exists(select 1 from meta.foreign_key where id = meta.foreign_key_id('test_schema', 'pirates', 'pirate_ship_fk2')),
-    'Foreign key inserted with schema_name and table_name should exist in meta.foreign_key.'
-);
 
 -- update name, from_column_id, to_column_id
-update meta.foreign_key set name = 'pirate_ship_fk_two',
-                            from_column_ids = array[meta.column_id('test_schema', 'pirates', 'ship_id2')],
-                            to_column_ids = array[meta.column_id('test_schema', 'dinghies', 'id')]
-                        where id = meta.foreign_key_id('test_schema', 'pirates', 'pirate_ship_fk2');
+update meta.foreign_key set constraint_name = 'pirate_ship_fk_two',
+                            from_column_names = array['ship_id2'],
+                            to_table_name = 'dinghies',
+                            to_column_names = array['id']
+                        where id = meta.foreign_key_id('test_schema', 'pirates', 'pirate_ship_fk');
 select ok(
-    not exists(select 1 from meta.foreign_key where id = meta.foreign_key_id('test_schema', 'pirates', 'pirate_ship_fk2')),
+    not exists(select 1 from meta.foreign_key where id = meta.foreign_key_id('test_schema', 'pirates', 'pirate_ship_fk')),
     'Foreign key updated with new name: old name should not exist.'
 );
 select ok(

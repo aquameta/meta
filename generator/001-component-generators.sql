@@ -13,7 +13,7 @@ meta_id_constructor
 -- jsonb stuff
 type_to_jsonb_comparator_function
 type_to_jsonb_comparator_op
-type_to_jsonb_type_constructor_function
+type_to_jsonb_constructor_function
 type_to_jsonb_cast
 
 -- view
@@ -86,8 +86,10 @@ declare
     attributes text := '';                  -- "schema_name text, relation_name text, name text"
     arg_names text := '';                   -- "schema_name, relation_name, name"
     compare_to_jsonb text := 'select ';     -- "select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'"
+    compare_jsonb_to_type text := 'select ';-- "select leftarg->>'schema_name' = (rightarg).schema_name and leftarg->>'name' = rightarg.name"
     constructor_args_from_jsonb text := ''; -- value->>'schema_name', value->>'name'
     compare_to_json text := 'select ';      -- "select (leftarg).schema_name = rightarg->>'schema_name' and (leftarg).name = rightarg->>'name'"
+    compare_json_to_type text := 'select '; -- "select leftarg->>'schema_name' = (rightarg).schema_name and leftarg->>'name' = rightarg.name"
     constructor_args_from_json text := '';  -- value->>'schema_name', value->>'name'
     meta_id_path text := name || '/';
 
@@ -107,6 +109,7 @@ begin
                 -- format('value->>%L', constructor_arg_names[i]);
                 format('(value->>%L)::%I', constructor_arg_names[i], constructor_arg_types[i]);
 		end if;
+
         -- compare to jsonb
         if constructor_arg_types[i] = 'text[]' then
             compare_to_jsonb :=  compare_to_jsonb
@@ -114,6 +117,15 @@ begin
         else
             compare_to_jsonb :=  compare_to_jsonb ||
                 format('((leftarg).%I)::text = (rightarg)->>%L', constructor_arg_names[i], constructor_arg_names[i]);
+        end if;
+
+        -- compare jsonb to type
+        if constructor_arg_types[i] = 'text[]' then
+            compare_jsonb_to_type :=  compare_jsonb_to_type
+                || format('leftarg->%L = to_jsonb((rightarg).%I)', constructor_arg_names[i], constructor_arg_names[i]);
+        else
+            compare_jsonb_to_type :=  compare_jsonb_to_type ||
+                format('(leftarg)->>%L = ((rightarg).%I)::text', constructor_arg_names[i], constructor_arg_names[i]);
         end if;
 
 		-- constructor args from json
@@ -125,6 +137,7 @@ begin
                 -- format('value->>%L', constructor_arg_names[i]);
                 format('(value->>%L)::%I', constructor_arg_names[i], constructor_arg_types[i]);
 		end if;
+
         -- compare to json
         if constructor_arg_types[i] = 'text[]' then
             compare_to_json :=  compare_to_json
@@ -134,16 +147,27 @@ begin
                 format('((leftarg).%I)::text = ((rightarg)->>%L)::text', constructor_arg_names[i], constructor_arg_names[i]);
         end if;
 
+        -- compare json to type
+        if constructor_arg_types[i] = 'text[]' then
+            compare_json_to_type :=  compare_json_to_type
+                || format('(leftarg->%L)::text = (to_json((rightarg).%I))::text', constructor_arg_names[i], constructor_arg_names[i]);
+        else
+            compare_json_to_type :=  compare_json_to_type ||
+                format('(leftarg)->>%L = ((rightarg).%I)::text', constructor_arg_names[i], constructor_arg_names[i]);
+        end if;
+
         -- comma?
         if i < array_length(constructor_arg_names,1) then
-            attributes := attributes || ',';
-            constructor_args := constructor_args || ',';
-            arg_names := arg_names || ',';
-            compare_to_jsonb := compare_to_jsonb || ' and ';
-            constructor_args_from_jsonb := constructor_args_from_jsonb || ', ';
-            compare_to_json := compare_to_json || ' and ';
-            constructor_args_from_json := constructor_args_from_json || ', ';
-            meta_id_path := meta_id_path || '/';
+            attributes                     := attributes || ',';
+            constructor_args               := constructor_args || ',';
+            arg_names                      := arg_names || ',';
+            compare_to_jsonb               := compare_to_jsonb || ' and ';
+            compare_jsonb_to_type          := compare_jsonb_to_type || ' and ';
+            constructor_args_from_jsonb    := constructor_args_from_jsonb || ', ';
+            compare_to_json                := compare_to_json || ' and ';
+            compare_json_to_type           := compare_json_to_type || ' and ';
+            constructor_args_from_json     := constructor_args_from_json || ', ';
+            meta_id_path                   := meta_id_path || '/';
         end if;
         i := i+1;
         -- raise notice '    arg_names: %', arg_names;
@@ -165,8 +189,10 @@ begin
     result := result || hstore('attributes', attributes);
     result := result || hstore('arg_names', arg_names);
     result := result || hstore('compare_to_jsonb', compare_to_jsonb);
+    result := result || hstore('compare_jsonb_to_type', compare_jsonb_to_type);
     result := result || hstore('constructor_args_from_jsonb', constructor_args_from_jsonb);
     result := result || hstore('compare_to_json', compare_to_json);
+    result := result || hstore('compare_json_to_type', compare_json_to_type);
     result := result || hstore('constructor_args_from_json', constructor_args_from_json);
     result := result || hstore('meta_id_path', meta_id_path);
     /*
@@ -265,13 +291,30 @@ $$ language plpgsql;
 
 /*
  *
- * json / jsonb
+ * to jsonb
  *
  */
 
-
-
-
+/**********************************************************************************
+create function meta.relation_id(value jsonb) returns meta.relation_id as $_$
+select meta.relation_id(value->>'schema_name', value->>'name')
+$_$ immutable language sql;
+**********************************************************************************/
+create or replace function stmt_create_type_to_jsonb_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta.%I(value jsonb) returns meta.%I as $_$select meta.%I(%s) $_$ immutable language sql;',
+        name || '_id',
+        name || '_id',
+        name || '_id',
+        snippets['constructor_args_from_jsonb']
+    );
+    return stmt;
+end;
+$$ language plpgsql;
 
 
 /**********************************************************************************
@@ -310,28 +353,6 @@ $$ language plpgsql;
 
 
 /**********************************************************************************
-create function meta.relation_id(value jsonb) returns meta.relation_id as $_$
-select meta.relation_id(value->>'schema_name', value->>'name')
-$_$ immutable language sql;
-**********************************************************************************/
-create or replace function stmt_create_type_to_jsonb_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare
-    stmt text := '';
-    snippets public.hstore;
-begin
-    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create function meta.%I(value jsonb) returns meta.%I as $_$select meta.%I(%s) $_$ immutable language sql;',
-        name || '_id',
-        name || '_id',
-        name || '_id',
-        snippets['constructor_args_from_jsonb']
-    );
-    return stmt;
-end;
-$$ language plpgsql;
-
-
-/**********************************************************************************
 create cast (jsonb as meta.relation_id) with function meta.relation_id(jsonb) as assignment;
 **********************************************************************************/
 create or replace function stmt_create_type_to_jsonb_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
@@ -346,11 +367,114 @@ begin
 end;
 $$ language plpgsql;
 
+
+
+/*
+ * from jsonb
+ */
+
+/**********************************************************************************
+create function meta.foreign_data_wrapper_id_to_jsonb(value meta.foreign_data_wrapper_id) returns jsonb as $_$
+select row(value.name)::meta.foreign_data_wrapper_id
+$_$ immutable language sql;
+**********************************************************************************/
+create or replace function stmt_create_jsonb_to_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta.%I(value meta.%I) returns jsonb as $_$select to_jsonb(value)$_$ immutable language sql;',
+        name || '_id_to_jsonb',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create function meta.eq(leftarg jsonb, rightarg meta.foreign_data_wrapper_id) returns boolean as $_$
+select (leftarg)->>'name' = ((rightarg).name)::text
+$_$ immutable language sql;
+**********************************************************************************/
+create or replace function stmt_create_jsonb_to_type_comparator_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta.eq(leftarg jsonb, rightarg meta.%I) returns boolean as $_$%s$_$ immutable language sql;',
+        name || '_id',
+        snippets['compare_jsonb_to_type']
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create operator pg_catalog.= (leftarg = jsonb, rightarg = meta.relation_id, procedure = meta.eq);
+**********************************************************************************/
+create or replace function stmt_create_jsonb_to_type_comparator_op (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create operator meta.= (leftarg = jsonb, rightarg = meta.%I, procedure = meta.eq);',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create cast (meta.relation_id as json) with function meta.relation_id(jsonb) as assignment;
+**********************************************************************************/
+create or replace function stmt_create_jsonb_to_type_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create cast (meta.%I as jsonb) with function meta.%I(meta.%I) as assignment;',
+        name || '_id',
+        name || '_id_to_jsonb',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
 /*
  *
- * the next four are just copy/pasta of the previous four, but for json.
+ * json
+ *
+ * NOTE: below eight components are exact copy/past of above jsonb components
+ * but with :%s/jsonb/json/g.  make edits above and then paste below.
  *
  */
+
+
+/**********************************************************************************
+create function meta.relation_id(value json) returns meta.relation_id as $_$
+select meta.relation_id(value->>'schema_name', value->>'name')
+$_$ immutable language sql;
+**********************************************************************************/
+create or replace function stmt_create_type_to_json_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta.%I(value json) returns meta.%I as $_$select meta.%I(%s) $_$ immutable language sql;',
+        name || '_id',
+        name || '_id',
+        name || '_id',
+        snippets['constructor_args_from_json']
+    );
+    return stmt;
+end;
+$$ language plpgsql;
 
 
 /**********************************************************************************
@@ -389,28 +513,6 @@ $$ language plpgsql;
 
 
 /**********************************************************************************
-create function meta.relation_id(value json) returns meta.relation_id as $_$
-select meta.relation_id(value->>'schema_name', value->>'name')
-$_$ immutable language sql;
-**********************************************************************************/
-create or replace function stmt_create_type_to_json_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
-declare
-    stmt text := '';
-    snippets public.hstore;
-begin
-    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
-    stmt := format('create function meta.%I(value json) returns meta.%I as $_$select meta.%I(%s) $_$ immutable language sql;',
-        name || '_id',
-        name || '_id',
-        name || '_id',
-        snippets['constructor_args_from_json']
-    );
-    return stmt;
-end;
-$$ language plpgsql;
-
-
-/**********************************************************************************
 create cast (json as meta.relation_id) with function meta.relation_id(json) as assignment;
 **********************************************************************************/
 create or replace function stmt_create_type_to_json_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
@@ -424,6 +526,84 @@ begin
     return stmt;
 end;
 $$ language plpgsql;
+
+
+
+/*
+ * from json
+ */
+
+/**********************************************************************************
+create function meta.foreign_data_wrapper_id_to_json(value meta.foreign_data_wrapper_id) returns json as $_$
+select row(value.name)::meta.foreign_data_wrapper_id
+$_$ immutable language sql;
+**********************************************************************************/
+create or replace function stmt_create_json_to_type_constructor_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta.%I(value meta.%I) returns json as $_$select to_json(value)$_$ immutable language sql;',
+        name || '_id_to_json',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create function meta.eq(leftarg json, rightarg meta.foreign_data_wrapper_id) returns boolean as $_$
+select (leftarg)->>'name' = ((rightarg).name)::text
+$_$ immutable language sql;
+**********************************************************************************/
+create or replace function stmt_create_json_to_type_comparator_function (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+    snippets public.hstore;
+begin
+    snippets := stmt_snippets(name, constructor_arg_names, constructor_arg_types);
+    stmt := format('create function meta.eq(leftarg json, rightarg meta.%I) returns boolean as $_$%s$_$ immutable language sql;',
+        name || '_id',
+        snippets['compare_json_to_type']
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create operator pg_catalog.= (leftarg = json, rightarg = meta.relation_id, procedure = meta.eq);
+**********************************************************************************/
+create or replace function stmt_create_json_to_type_comparator_op (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create operator meta.= (leftarg = json, rightarg = meta.%I, procedure = meta.eq);',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
+
+/**********************************************************************************
+create cast (meta.relation_id as json) with function meta.relation_id(json) as assignment;
+**********************************************************************************/
+create or replace function stmt_create_json_to_type_cast (name text, constructor_arg_names text[], constructor_arg_types text[]) returns text as $$
+declare
+    stmt text := '';
+begin
+    stmt := format('create cast (meta.%I as json) with function meta.%I(meta.%I) as assignment;',
+        name || '_id',
+        name || '_id_to_json',
+        name || '_id'
+    );
+    return stmt;
+end;
+$$ language plpgsql;
+
 
 /*
  *
