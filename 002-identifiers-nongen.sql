@@ -99,7 +99,7 @@ begin
         (field_id).relation_name,
         pk_stmt
     );
-    raise notice 'stmt: %', stmt;
+    -- raise notice 'stmt: %', stmt;
 
     execute stmt into literal_value;
 
