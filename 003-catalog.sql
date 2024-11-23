@@ -258,8 +258,8 @@ create view meta.relation as
            t.table_schema::text as schema_name,
            t.table_name::text as name,
            t.table_type::text as "type",
-           nullif(array_agg(c.id), array[null]::meta.column_id[]) as primary_key_column_ids,
-           nullif(array_agg(c.name::text), array[null]::text[]) as primary_key_column_names
+           nullif(array_agg(c.id order by c.position), array[null]::meta.column_id[]) as primary_key_column_ids,
+           nullif(array_agg(c.name::text order by c.position), array[null]::text[]) as primary_key_column_names
 
     from information_schema.tables t
 
